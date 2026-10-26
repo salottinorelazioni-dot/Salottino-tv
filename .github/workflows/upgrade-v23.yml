@@ -1,0 +1,415 @@
+name: Upgrade Foyho TV 2.3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade-build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upgrade Foyho TV 2.3 source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+
+          def replace_once(old, new, label):
+              global s
+              if old not in s:
+                  raise SystemExit(f"Blocco non trovato: {label}")
+              s = s.replace(old, new, 1)
+
+          replace_once(
+              "import android.app.*;\n",
+              "import android.app.*;\nimport android.app.role.RoleManager;\n",
+              "RoleManager import"
+          )
+
+          replace_once(
+              "import java.io.*;\nimport java.text.SimpleDateFormat;\nimport java.util.*;\n",
+              "import java.io.*;\nimport java.net.*;\nimport java.text.SimpleDateFormat;\nimport java.util.*;\nimport org.json.*;\n",
+              "network/json imports"
+          )
+
+          replace_once(
+              "    private static final int REQ_LOCAL_VIDEO = 102;\n",
+              "    private static final int REQ_LOCAL_VIDEO = 102;\n    private static final int REQ_HOME_ROLE = 103;\n",
+              "home request constant"
+          )
+
+          replace_once(
+              "    private TextView clock, date, focusTitle, focusSubtitle;\n",
+              "    private TextView clock, date, weather, focusTitle, focusSubtitle;\n",
+              "weather field"
+          )
+
+          replace_once(
+              "        buildHome();\n        updateClock();\n    }\n\n    @Override protected void onResume()",
+              "        buildHome();\n        updateClock();\n        updateWeather();\n    }\n\n    @Override protected void onResume()",
+              "weather on create"
+          )
+
+          replace_once(
+              "            buildHome();\n            updateClock();\n        }\n    }\n\n    private void buildHome()",
+              "            buildHome();\n            updateClock();\n            updateWeather();\n        }\n    }\n\n    private void buildHome()",
+              "weather on resume"
+          )
+
+          old_header = '''        LinearLayout timeBox = new LinearLayout(this);
+                  timeBox.setOrientation(LinearLayout.VERTICAL);
+                  timeBox.setGravity(Gravity.RIGHT);
+                  clock = label("", 28, Color.WHITE);
+                  clock.setTypeface(null, Typeface.BOLD);
+                  date = label("", 13, 0xFFB7C0CB);
+                  timeBox.addView(clock);
+                  timeBox.addView(date);
+                  header.addView(timeBox);
+
+                  Button customize = smallButton("Personalizza");
+                  LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(dp(156), dp(52));
+                  cbp.setMargins(dp(24),0,0,0);
+                  customize.setOnClickListener(v -> showSettings());
+                  header.addView(customize, cbp);
+          '''
+
+          new_header = '''        LinearLayout timeBox = new LinearLayout(this);
+                  timeBox.setOrientation(LinearLayout.VERTICAL);
+                  timeBox.setGravity(Gravity.RIGHT);
+
+                  LinearLayout topInfo = new LinearLayout(this);
+                  topInfo.setOrientation(LinearLayout.HORIZONTAL);
+                  topInfo.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+
+                  weather = label("☁ --°C", 15, 0xFF8EFFB0);
+                  weather.setSingleLine(true);
+                  LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
+                  wp.setMargins(0, 0, dp(18), 0);
+                  topInfo.addView(weather, wp);
+
+                  clock = label("", 28, Color.WHITE);
+                  clock.setTypeface(null, Typeface.BOLD);
+                  topInfo.addView(clock);
+
+                  date = label("", 13, 0xFFB7C0CB);
+                  date.setGravity(Gravity.RIGHT);
+
+                  timeBox.addView(topInfo);
+                  timeBox.addView(date);
+                  header.addView(timeBox);
+
+                  Button customize = smallButton("Personalizza");
+                  LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(dp(156), dp(52));
+                  cbp.setMargins(dp(24),0,0,0);
+                  customize.setOnClickListener(v -> showSettings());
+                  customize.setOnFocusChangeListener((v, focused) -> {
+                      v.animate()
+                              .scaleX(focused ? 1.09f : 1f)
+                              .scaleY(focused ? 1.09f : 1f)
+                              .setDuration(120)
+                              .start();
+                      GradientDrawable g = new GradientDrawable();
+                      g.setColor(focused ? 0xAA25C95A : 0x5534D96B);
+                      g.setCornerRadius(dp(18));
+                      g.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0xAA58FF89);
+                      v.setBackground(g);
+                      if (focused && focusTitle != null) {
+                          focusTitle.setText("Personalizza");
+                          focusSubtitle.setText("Sfondo, meteo, launcher predefinito e altre opzioni");
+                      }
+                  });
+                  header.addView(customize, cbp);
+          '''
+          replace_once(old_header, new_header, "header weather/focus")
+
+          old_settings = '''        String[] options = {
+                          "Scegli sfondo personale",
+                          "Ripristina sfondo Foyho",
+                          "Dimensione tile",
+                          "Oscuramento sfondo",
+                          "Mostra app nascoste"
+                  };
+                  new AlertDialog.Builder(this)
+                          .setTitle("Personalizza Foyho TV")
+                          .setItems(options, (d, which) -> {
+                              if (which == 0) chooseWallpaper();
+                              else if (which == 1) {
+                                  prefs.edit().remove("wallpaper_uri").apply();
+                                  buildHome();
+                              } else if (which == 2) chooseCardSize();
+                              else if (which == 3) chooseDim();
+                              else if (which == 4) showHiddenApps();
+                          }).show();
+          '''
+
+          new_settings = '''        String[] options = {
+                          "Scegli sfondo personale",
+                          "Ripristina sfondo Foyho",
+                          "Città meteo",
+                          "Imposta Foyho TV come Home",
+                          "Dimensione tile",
+                          "Oscuramento sfondo",
+                          "Mostra app nascoste"
+                  };
+                  new AlertDialog.Builder(this)
+                          .setTitle("Personalizza Foyho TV")
+                          .setItems(options, (d, which) -> {
+                              if (which == 0) chooseWallpaper();
+                              else if (which == 1) {
+                                  prefs.edit().remove("wallpaper_uri").apply();
+                                  buildHome();
+                                  updateWeather();
+                              } else if (which == 2) showWeatherCityDialog();
+                              else if (which == 3) requestDefaultHome();
+                              else if (which == 4) chooseCardSize();
+                              else if (which == 5) chooseDim();
+                              else if (which == 6) showHiddenApps();
+                          }).show();
+          '''
+          replace_once(old_settings, new_settings, "settings menu")
+
+          replace_once(
+              '        row.addView(systemCard("Ingressi","⇄", v -> safeStart("android.settings.TV_INPUT_SETTINGS")), appCardParams());\n        row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), appCardParams());\n',
+              '        row.addView(systemCard("Ingressi","⇄", v -> safeStart("android.settings.TV_INPUT_SETTINGS")), appCardParams());\n        row.addView(systemCard("Home predefinita","⌂", v -> requestDefaultHome()), appCardParams());\n        row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), appCardParams());\n',
+              "system home card"
+          )
+
+          marker = "    private void chooseWallpaper() {\n"
+          new_methods = r'''    private void showWeatherCityDialog() {
+                  final EditText input = new EditText(this);
+                  input.setSingleLine(true);
+                  input.setHint("es. Napoli");
+                  input.setText(prefs.getString("weather_city", ""));
+
+                  new AlertDialog.Builder(this)
+                          .setTitle("Città meteo")
+                          .setMessage("Scrivi la città da usare per il meteo. Lascia vuoto per il rilevamento automatico tramite rete.")
+                          .setView(input)
+                          .setPositiveButton("Salva", (d, w) -> {
+                              String city = input.getText().toString().trim();
+                              prefs.edit()
+                                      .putString("weather_city", city)
+                                      .remove("weather_last")
+                                      .remove("weather_text")
+                                      .apply();
+                              updateWeather();
+                          })
+                          .setNeutralButton("Automatico", (d, w) -> {
+                              prefs.edit()
+                                      .remove("weather_city")
+                                      .remove("weather_last")
+                                      .remove("weather_text")
+                                      .apply();
+                              updateWeather();
+                          })
+                          .setNegativeButton("Annulla", null)
+                          .show();
+              }
+
+              private void updateWeather() {
+                  if (weather == null) return;
+
+                  long now = System.currentTimeMillis();
+                  long last = prefs.getLong("weather_last", 0);
+                  String cached = prefs.getString("weather_text", null);
+                  if (cached != null && now - last < 30L * 60L * 1000L) {
+                      weather.setText(cached);
+                      return;
+                  }
+
+                  weather.setText("☁ …");
+
+                  new Thread(() -> {
+                      HttpURLConnection con = null;
+                      try {
+                          String city = prefs.getString("weather_city", "").trim();
+                          String target;
+                          if (city.isEmpty()) {
+                              target = "https://wttr.in/?format=j1";
+                          } else {
+                              target = "https://wttr.in/" +
+                                      URLEncoder.encode(city, "UTF-8").replace("+", "%20") +
+                                      "?format=j1";
+                          }
+
+                          con = (HttpURLConnection) new URL(target).openConnection();
+                          con.setConnectTimeout(6000);
+                          con.setReadTimeout(6000);
+                          con.setRequestProperty("User-Agent", "FoyhoTV/2.3");
+                          con.setRequestProperty("Accept", "application/json");
+
+                          StringBuilder out = new StringBuilder();
+                          try (BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
+                              String line;
+                              while ((line = br.readLine()) != null) out.append(line);
+                          }
+
+                          JSONObject root = new JSONObject(out.toString());
+                          JSONObject current = root.getJSONArray("current_condition").getJSONObject(0);
+                          String temp = current.optString("temp_C", "--");
+                          String desc = "";
+                          JSONArray descArray = current.optJSONArray("weatherDesc");
+                          if (descArray != null && descArray.length() > 0) {
+                              desc = descArray.getJSONObject(0).optString("value", "");
+                          }
+
+                          String text = weatherSymbol(desc) + " " + temp + "°C";
+                          prefs.edit()
+                                  .putString("weather_text", text)
+                                  .putLong("weather_last", System.currentTimeMillis())
+                                  .apply();
+
+                          final String result = text;
+                          runOnUiThread(() -> {
+                              if (weather != null) weather.setText(result);
+                          });
+                      } catch(Exception e) {
+                          runOnUiThread(() -> {
+                              if (weather != null) {
+                                  weather.setText(prefs.getString("weather_text", "☁ --°C"));
+                              }
+                          });
+                      } finally {
+                          if (con != null) con.disconnect();
+                      }
+                  }).start();
+              }
+
+              private String weatherSymbol(String description) {
+                  String d = description == null ? "" : description.toLowerCase(Locale.ROOT);
+                  if (d.contains("thunder")) return "⚡";
+                  if (d.contains("snow") || d.contains("sleet") || d.contains("ice")) return "❄";
+                  if (d.contains("rain") || d.contains("drizzle") || d.contains("shower")) return "☂";
+                  if (d.contains("fog") || d.contains("mist")) return "≋";
+                  if (d.contains("partly")) return "⛅";
+                  if (d.contains("cloud") || d.contains("overcast")) return "☁";
+                  if (d.contains("sun") || d.contains("clear")) return "☀";
+                  return "☁";
+              }
+
+              private boolean isDefaultHome() {
+                  try {
+                      if (Build.VERSION.SDK_INT >= 29) {
+                          RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
+                          if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) {
+                              return rm.isRoleHeld(RoleManager.ROLE_HOME);
+                          }
+                      }
+
+                      Intent home = new Intent(Intent.ACTION_MAIN);
+                      home.addCategory(Intent.CATEGORY_HOME);
+                      ResolveInfo ri = getPackageManager().resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
+                      return ri != null && ri.activityInfo != null &&
+                              getPackageName().equals(ri.activityInfo.packageName);
+                  } catch(Exception ignored) {
+                      return false;
+                  }
+              }
+
+              private void requestDefaultHome() {
+                  if (isDefaultHome()) {
+                      Toast.makeText(this, "Foyho TV è già la Home predefinita", Toast.LENGTH_LONG).show();
+                      return;
+                  }
+
+                  try {
+                      if (Build.VERSION.SDK_INT >= 29) {
+                          RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
+                          if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) {
+                              startActivityForResult(
+                                      rm.createRequestRoleIntent(RoleManager.ROLE_HOME),
+                                      REQ_HOME_ROLE
+                              );
+                              return;
+                          }
+                      }
+
+                      Intent settings = new Intent(Settings.ACTION_HOME_SETTINGS);
+                      if (settings.resolveActivity(getPackageManager()) != null) {
+                          startActivity(settings);
+                          Toast.makeText(this, "Seleziona Foyho TV come app Home predefinita", Toast.LENGTH_LONG).show();
+                          return;
+                      }
+
+                      Intent home = new Intent(Intent.ACTION_MAIN);
+                      home.addCategory(Intent.CATEGORY_HOME);
+                      home.addCategory(Intent.CATEGORY_DEFAULT);
+                      startActivity(Intent.createChooser(home, "Scegli Foyho TV come Home"));
+                  } catch(Exception e) {
+                      Toast.makeText(this, "Apri Impostazioni > App > App predefinite > Home e scegli Foyho TV", Toast.LENGTH_LONG).show();
+                      safeStart(Settings.ACTION_SETTINGS);
+                  }
+              }
+
+          '''
+          if marker not in s:
+              raise SystemExit("Blocco non trovato: insertion marker")
+          s = s.replace(marker, new_methods + marker, 1)
+
+          old_result = '''    @Override protected void onActivityResult(int req, int result, Intent data) {
+                  super.onActivityResult(req, result, data);
+                  if (result != RESULT_OK || data == null) return;
+                  Uri uri = data.getData();
+          '''
+          new_result = '''    @Override protected void onActivityResult(int req, int result, Intent data) {
+                  super.onActivityResult(req, result, data);
+
+                  if (req == REQ_HOME_ROLE) {
+                      if (isDefaultHome()) {
+                          Toast.makeText(this, "Foyho TV impostata come Home predefinita", Toast.LENGTH_LONG).show();
+                      } else {
+                          Toast.makeText(this, "Foyho TV non è ancora la Home predefinita", Toast.LENGTH_LONG).show();
+                      }
+                      return;
+                  }
+
+                  if (result != RESULT_OK || data == null) return;
+                  Uri uri = data.getData();
+          '''
+          replace_once(old_result, new_result, "home role result")
+
+          p.write_text(s, encoding="utf-8")
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          m = manifest.read_text(encoding="utf-8")
+          if 'android.permission.INTERNET' not in m:
+              m = m.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET" />\n'
+              )
+          manifest.write_text(m, encoding="utf-8")
+
+          gradle = Path("app/build.gradle")
+          g = gradle.read_text(encoding="utf-8")
+          g = g.replace("versionCode 3", "versionCode 4")
+          g = g.replace("versionName '2.2.0'", "versionName '2.3.0'")
+          gradle.write_text(g, encoding="utf-8")
+
+          PY
+
+      - name: Save Foyho TV 2.3 source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java app/src/main/AndroidManifest.xml app/build.gradle
+          git diff --cached --quiet || git commit -m "Upgrade to Foyho TV 2.3"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 
