@@ -1,0 +1,57 @@
+name: Foyho TV 3.6.1 EXP Navigation Sound
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment-3.5
+          fetch-depth: 0
+
+      - name: Add lightweight navigation click
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcCA9IFBhdGgoImFwcC9zcmMvbWFpbi9qYXZhL2l0L3NhbG90dGluby90di9NYWluQWN0aXZpdHkuamF2YSIpCnMgPSBwLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQoKZGVmIHJlcGxhY2Vfb25jZShvbGQsIG5ldywgbGFiZWwpOgogICAgZ2xvYmFsIHMKICAgIGlmIG9sZCBub3QgaW4gczoKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYie2xhYmVsfTogYmxvY2NvIG5vbiB0cm92YXRvIikKICAgIHMgPSBzLnJlcGxhY2Uob2xkLCBuZXcsIDEpCgojIEhlbHBlciBzb25vcm8gbGVnZ2VybzogZWZmZXR0byBzdGFuZGFyZCBBbmRyb2lkLCB2b2x1bWUgcmlkb3R0by4KbWFya2VyID0gJycnICAgIHByaXZhdGUgdm9pZCBmb2N1c0JlaGF2aW9yKFZpZXcgdmlldywgU3RyaW5nIHRpdGxlLCBTdHJpbmcgc3VidGl0bGUpIHsKJycnCmhlbHBlciA9ICcnJyAgICBwcml2YXRlIHZvaWQgcGxheU5hdmlnYXRpb25UaWNrKCkgewogICAgICAgIHRyeSB7CiAgICAgICAgICAgIGFuZHJvaWQubWVkaWEuQXVkaW9NYW5hZ2VyIGF1ZGlvID0KICAgICAgICAgICAgICAgICAgICAoYW5kcm9pZC5tZWRpYS5BdWRpb01hbmFnZXIpIGdldFN5c3RlbVNlcnZpY2UoQ29udGV4dC5BVURJT19TRVJWSUNFKTsKICAgICAgICAgICAgaWYgKGF1ZGlvICE9IG51bGwpIHsKICAgICAgICAgICAgICAgIGF1ZGlvLnBsYXlTb3VuZEVmZmVjdChhbmRyb2lkLm1lZGlhLkF1ZGlvTWFuYWdlci5GWF9LRVlfQ0xJQ0ssIDAuMThmKTsKICAgICAgICAgICAgfQogICAgICAgIH0gY2F0Y2goRXhjZXB0aW9uIGlnbm9yZWQpIHt9CiAgICB9CgonJycKaWYgbWFya2VyIG5vdCBpbiBzOgogICAgcmFpc2UgU3lzdGVtRXhpdCgiZm9jdXNCZWhhdmlvciBtYXJrZXIgbm9uIHRyb3ZhdG8iKQpzID0gcy5yZXBsYWNlKG1hcmtlciwgaGVscGVyICsgbWFya2VyLCAxKQoKIyBTdW9ubyBzb2xvIHF1YW5kbyBpbCB0aWxlIGFjcXVpc2lzY2UgaWwgZm9jdXMuCnJlcGxhY2Vfb25jZSgKJycnICAgIHByaXZhdGUgdm9pZCBmb2N1c0JlaGF2aW9yKFZpZXcgdmlldywgU3RyaW5nIHRpdGxlLCBTdHJpbmcgc3VidGl0bGUpIHsKICAgICAgICB2aWV3LnNldE9uRm9jdXNDaGFuZ2VMaXN0ZW5lcigodiwgZm9jdXNlZCkgLT4gewogICAgICAgICAgICBWaWV3UGFyZW50IHBhcmVudCA9IHYuZ2V0UGFyZW50KCk7CicnJywKJycnICAgIHByaXZhdGUgdm9pZCBmb2N1c0JlaGF2aW9yKFZpZXcgdmlldywgU3RyaW5nIHRpdGxlLCBTdHJpbmcgc3VidGl0bGUpIHsKICAgICAgICB2aWV3LnNldE9uRm9jdXNDaGFuZ2VMaXN0ZW5lcigodiwgZm9jdXNlZCkgLT4gewogICAgICAgICAgICBpZiAoZm9jdXNlZCkgcGxheU5hdmlnYXRpb25UaWNrKCk7CgogICAgICAgICAgICBWaWV3UGFyZW50IHBhcmVudCA9IHYuZ2V0UGFyZW50KCk7CicnJywKInRpbGUgZm9jdXMgc291bmQiCikKCiMgQW5jaGUgbCdpbmdyYW5hZ2dpbyBpbiBhbHRvIGTDoCBsbyBzdGVzc28gZmVlZGJhY2sgbGVnZ2Vyby4KcmVwbGFjZV9vbmNlKAonJycgICAgICAgIHYuc2V0T25Gb2N1c0NoYW5nZUxpc3RlbmVyKCh2aWV3LCBmb2N1c2VkKSAtPiB7CiAgICAgICAgICAgIHZpZXcuYW5pbWF0ZSgpCicnJywKJycnICAgICAgICB2LnNldE9uRm9jdXNDaGFuZ2VMaXN0ZW5lcigodmlldywgZm9jdXNlZCkgLT4gewogICAgICAgICAgICBpZiAoZm9jdXNlZCkgcGxheU5hdmlnYXRpb25UaWNrKCk7CgogICAgICAgICAgICB2aWV3LmFuaW1hdGUoKQonJycsCiJoZWFkZXIgZm9jdXMgc291bmQiCikKCnAud3JpdGVfdGV4dChzLCBlbmNvZGluZz0idXRmLTgiKQoKIyBWZXJzaW9uZSBzcGVyaW1lbnRhbGUgc3VjY2Vzc2l2YS4KZyA9IFBhdGgoImFwcC9idWlsZC5ncmFkbGUiKQpncyA9IGcucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCmdzID0gcmUuc3ViKHIidmVyc2lvbkNvZGVccytcZCsiLCAidmVyc2lvbkNvZGUgMTgiLCBncywgY291bnQ9MSkKZ3MgPSByZS5zdWIociJ2ZXJzaW9uTmFtZVxzKydbXiddKyciLCAidmVyc2lvbk5hbWUgJzMuNi4xLWV4cCciLCBncywgY291bnQ9MSkKZy53cml0ZV90ZXh0KGdzLCBlbmNvZGluZz0idXRmLTgiKQoKcHJpbnQoIkZveWhvIFRWIDMuNi4xIEVYUCBuYXZpZ2F0aW9uIHNvdW5kIGFwcGxpY2F0byIp' | base64 -d > /tmp/foyho361.py
+          python3 /tmp/foyho361.py
+
+      - name: Save only to experimental branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java app/build.gradle
+          git diff --cached --quiet || git commit -m "Foyho TV 3.6.1 EXP navigation sound"
+          git push origin HEAD:experiment-3.5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build experimental APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-3.6.1-EXP-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
