@@ -530,6 +530,8 @@ public class MainActivity extends Activity {
         name.setPadding(0, dp(10), 0, 0);
         tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
 
+        final String appLabel = String.valueOf(label);
+
         tile.setOnClickListener(v -> launchApp(ri));
         tile.setOnFocusChangeListener((v, hasFocus) -> {
             v.animate().scaleX(hasFocus ? 1.06f : 1f).scaleY(hasFocus ? 1.06f : 1f).setDuration(140).start();
@@ -539,8 +541,7 @@ public class MainActivity extends Activity {
                 v.setElevation(hasFocus ? dp(8) : 0f);
             }
             if (hasFocus) {
-                String title = String.valueOf(label);
-                heroTitle.setText(title);
+                heroTitle.setText(appLabel);
                 heroSubtitle.setText("Premi OK per aprire l'app selezionata");
             }
         });
