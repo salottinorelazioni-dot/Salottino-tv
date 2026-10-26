@@ -417,8 +417,20 @@ public class MainActivity extends Activity {
         return lp;
     }
 
+    private void playNavigationTick() {
+        try {
+            android.media.AudioManager audio =
+                    (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (audio != null) {
+                audio.playSoundEffect(android.media.AudioManager.FX_KEY_CLICK, 0.18f);
+            }
+        } catch(Exception ignored) {}
+    }
+
     private void focusBehavior(View view, String title, String subtitle) {
         view.setOnFocusChangeListener((v, focused) -> {
+            if (focused) playNavigationTick();
+
             ViewParent parent = v.getParent();
             if (parent instanceof ViewGroup) {
                 ViewGroup group = (ViewGroup) parent;
@@ -1876,6 +1888,8 @@ public class MainActivity extends Activity {
         v.setLayoutParams(lp);
 
         v.setOnFocusChangeListener((view, focused) -> {
+            if (focused) playNavigationTick();
+
             view.animate()
                     .scaleX(focused ? 1.09f : 1f)
                     .scaleY(focused ? 1.09f : 1f)
