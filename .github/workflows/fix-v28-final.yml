@@ -1,0 +1,71 @@
+name: Fix Foyho TV 2.8 Final
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fix notification shortcut
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+
+          old = 'Intent i = new Intent(Settings.ACTION_NOTIFICATION_SETTINGS);'
+          new = 'Intent i = new Intent("android.settings.NOTIFICATION_SETTINGS");'
+
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit("Riga notifiche non trovata")
+
+          p.write_text(s, encoding="utf-8")
+          print("Shortcut notifiche corretto")
+          PY
+
+      - name: Save final Foyho TV 2.8 fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java
+          git diff --cached --quiet || git commit -m "Final fix Foyho TV 2.8"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.8-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
