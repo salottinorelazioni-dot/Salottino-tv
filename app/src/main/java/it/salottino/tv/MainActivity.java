@@ -14,6 +14,8 @@ import android.net.Uri;
 import android.view.*;
 import android.widget.*;
 import java.io.*;
+import java.io.*;
+import java.util.Random;
 import java.net.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -28,6 +30,9 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private LinearLayout content;
     private TextView clock, date, weather, focusTitle, focusSubtitle;
+    private TextView inputsIcon, networkIcon, notificationsIcon, matrixOverlay;
+    private final Random matrixRandom = new Random();
+    private Runnable matrixRunnable;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<AppItem> apps = new ArrayList<>();
 
@@ -59,6 +64,8 @@ public class MainActivity extends Activity {
         buildHome();
         updateClock();
         updateWeather();
+        updateStatusIcons();
+        startMatrixRain();
     }
 
     @Override protected void onResume() {
@@ -68,12 +75,32 @@ public class MainActivity extends Activity {
             buildHome();
             updateClock();
             updateWeather();
+            updateStatusIcons();
+            startMatrixRain();
+        }
+    }
+
+    @Override protected void onDestroy() {
+        super.onDestroy();
+        if (handler != null && matrixRunnable != null) {
+            handler.removeCallbacks(matrixRunnable);
         }
     }
 
     private void buildHome() {
         root = new FrameLayout(this);
         applyBackground();
+
+        matrixOverlay = new TextView(this);
+        matrixOverlay.setTextColor(0x3314FF5A);
+        matrixOverlay.setTypeface(Typeface.MONOSPACE);
+        matrixOverlay.setTextSize(11);
+        matrixOverlay.setLineSpacing(0f, 0.86f);
+        matrixOverlay.setAlpha(0.22f);
+        matrixOverlay.setPadding(dp(22), dp(22), dp(22), dp(22));
+        matrixOverlay.setFocusable(false);
+        matrixOverlay.setClickable(false);
+        root.addView(matrixOverlay, new FrameLayout.LayoutParams(-1, -1));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -140,17 +167,37 @@ public class MainActivity extends Activity {
         topInfo.setOrientation(LinearLayout.HORIZONTAL);
         topInfo.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
 
-        weather = label("☁ --°C", 15, 0xFF8EFFB0);
+        LinearLayout iconBox = new LinearLayout(this);
+        iconBox.setOrientation(LinearLayout.HORIZONTAL);
+        iconBox.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+
+        inputsIcon = topStatusIcon("⇄", "Ingressi");
+        inputsIcon.setOnClickListener(v -> safeStart("android.settings.TV_INPUT_SETTINGS"));
+        iconBox.addView(inputsIcon);
+
+        networkIcon = topStatusIcon("⌁", "Rete");
+        networkIcon.setOnClickListener(v -> safeStart(Settings.ACTION_WIFI_SETTINGS));
+        iconBox.addView(networkIcon);
+
+        notificationsIcon = topStatusIcon("🔔", "Notifiche");
+        notificationsIcon.setOnClickListener(v -> openNotificationsPanel());
+        iconBox.addView(notificationsIcon);
+
+        LinearLayout.LayoutParams ibp = new LinearLayout.LayoutParams(-2, -2);
+        ibp.setMargins(0, 0, dp(16), 0);
+        topInfo.addView(iconBox, ibp);
+
+        weather = label("☁ --°C", 14, 0xFF8EFFB0);
         weather.setSingleLine(true);
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
-        wp.setMargins(0, 0, dp(18), 0);
+        wp.setMargins(0, 0, dp(16), 0);
         topInfo.addView(weather, wp);
 
-        clock = label("", 28, Color.WHITE);
+        clock = label("", 26, Color.WHITE);
         clock.setTypeface(null, Typeface.BOLD);
         topInfo.addView(clock);
 
-        date = label("", 13, 0xFFB7C0CB);
+        date = label("", 12, 0xFFB7C0CB);
         date.setGravity(Gravity.RIGHT);
 
         timeBox.addView(topInfo);
