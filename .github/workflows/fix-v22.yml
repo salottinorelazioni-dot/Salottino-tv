@@ -1,0 +1,60 @@
+name: Fix & Build Foyho TV 2.2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fix Foyho TV 2.2
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text()
+          old = "card.addView(sh,new FrameLayout.LayoutParams(-1,-1));"
+          new = "card.addView(shade,new FrameLayout.LayoutParams(-1,-1));"
+          if old not in s:
+              raise SystemExit("Riga da correggere non trovata")
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java
+          git commit -m "Fix Foyho TV 2.2 build"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+
+      - name: Install Android SDK
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Foyho TV 2.2 APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.2-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
