@@ -1,0 +1,57 @@
+name: Fix Foyho TV 3.5 EXP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment-3.5
+          fetch-depth: 0
+
+      - name: Restore app row methods in experiment only
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwID0gUGF0aCgiYXBwL3NyYy9tYWluL2phdmEvaXQvc2Fsb3R0aW5vL3R2L01haW5BY3Rpdml0eS5qYXZhIikKcyA9IHAucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCgppZiAicHJpdmF0ZSB2b2lkIGFkZEFwcFJvd0lmQW55KFN0cmluZyB0aXRsZSwgTGlzdDxBcHBJdGVtPiBsaXN0KSIgaW4gczoKICAgIHByaW50KCJNZXRvZGkgcmlnaGUgZ2nDoCBwcmVzZW50aTogbmVzc3VuYSBwYXRjaCBuZWNlc3NhcmlhIikKZWxzZToKICAgIG1hcmtlciA9ICcnJyAgICBwcml2YXRlIEZyYW1lTGF5b3V0IGJhc2VGcmFtZUNhcmQoKSB7CicnJwogICAgYmxvY2sgPSAnJycgICAgcHJpdmF0ZSB2b2lkIGFkZEFwcFJvd0lmQW55KFN0cmluZyB0aXRsZSwgTGlzdDxBcHBJdGVtPiBsaXN0KSB7CiAgICAgICAgaWYgKCFsaXN0LmlzRW1wdHkoKSkgYWRkQXBwUm93KHRpdGxlLCBsaXN0KTsKICAgIH0KCiAgICBwcml2YXRlIHZvaWQgYWRkQXBwUm93KFN0cmluZyB0aXRsZSwgTGlzdDxBcHBJdGVtPiBsaXN0KSB7CiAgICAgICAgYWRkUm93VGl0bGUodGl0bGUpOwoKICAgICAgICBIb3Jpem9udGFsU2Nyb2xsVmlldyBoc3YgPSBuZXcgSG9yaXpvbnRhbFNjcm9sbFZpZXcodGhpcyk7CiAgICAgICAgaHN2LnNldEhvcml6b250YWxTY3JvbGxCYXJFbmFibGVkKGZhbHNlKTsKICAgICAgICBoc3Yuc2V0Q2xpcENoaWxkcmVuKGZhbHNlKTsKICAgICAgICBoc3Yuc2V0Q2xpcFRvUGFkZGluZyhmYWxzZSk7CgogICAgICAgIExpbmVhckxheW91dCByb3cgPSBuZXcgTGluZWFyTGF5b3V0KHRoaXMpOwogICAgICAgIHJvdy5zZXRPcmllbnRhdGlvbihMaW5lYXJMYXlvdXQuSE9SSVpPTlRBTCk7CiAgICAgICAgcm93LnNldENsaXBDaGlsZHJlbihmYWxzZSk7CiAgICAgICAgcm93LnNldENsaXBUb1BhZGRpbmcoZmFsc2UpOwogICAgICAgIHJvdy5zZXRQYWRkaW5nKGRwKDE4KSwgZHAoMTYpLCBkcCgxOCksIGRwKDI4KSk7CiAgICAgICAgaHN2LmFkZFZpZXcocm93LCBuZXcgSG9yaXpvbnRhbFNjcm9sbFZpZXcuTGF5b3V0UGFyYW1zKC0yLC0yKSk7CgogICAgICAgIGZvciAoQXBwSXRlbSBpdGVtIDogbGlzdCkgewogICAgICAgICAgICByb3cuYWRkVmlldyhjcmVhdGVBcHBDYXJkKGl0ZW0pLCBtZWRpdW1BcHBDYXJkUGFyYW1zKCkpOwogICAgICAgIH0KCiAgICAgICAgY29udGVudC5hZGRWaWV3KGhzdiwgbmV3IExpbmVhckxheW91dC5MYXlvdXRQYXJhbXMoLTEsIGRwKDE5OCkpKTsKICAgIH0KCiAgICBwcml2YXRlIHZvaWQgYWRkUm93VGl0bGUoU3RyaW5nIHRpdGxlKSB7CiAgICAgICAgVGV4dFZpZXcgcm93VGl0bGUgPSBsYWJlbCh0aXRsZSwgMTksIENvbG9yLldISVRFKTsKICAgICAgICByb3dUaXRsZS5zZXRUeXBlZmFjZShudWxsLCBUeXBlZmFjZS5CT0xEKTsKICAgICAgICBMaW5lYXJMYXlvdXQuTGF5b3V0UGFyYW1zIHJ0cCA9IG5ldyBMaW5lYXJMYXlvdXQuTGF5b3V0UGFyYW1zKC0xLC0yKTsKICAgICAgICBydHAuc2V0TWFyZ2lucygwLCBkcCgxMCksIDAsIGRwKDcpKTsKICAgICAgICBjb250ZW50LmFkZFZpZXcocm93VGl0bGUsIHJ0cCk7CiAgICB9CgogICAgcHJpdmF0ZSBWaWV3IGNyZWF0ZUFwcENhcmQoQXBwSXRlbSBpdGVtKSB7CiAgICAgICAgRnJhbWVMYXlvdXQgY2FyZCA9IGJhc2VGcmFtZUNhcmQoKTsKCiAgICAgICAgSW1hZ2VWaWV3IGFydCA9IG5ldyBJbWFnZVZpZXcodGhpcyk7CiAgICAgICAgaWYgKGl0ZW0uYmFubmVyICE9IG51bGwpIHsKICAgICAgICAgICAgYXJ0LnNldFNjYWxlVHlwZShJbWFnZVZpZXcuU2NhbGVUeXBlLkNFTlRFUl9DUk9QKTsKICAgICAgICAgICAgYXJ0LnNldEltYWdlRHJhd2FibGUoaXRlbS5iYW5uZXIpOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgIGFydC5zZXRTY2FsZVR5cGUoSW1hZ2VWaWV3LlNjYWxlVHlwZS5DRU5URVJfSU5TSURFKTsKICAgICAgICAgICAgYXJ0LnNldFBhZGRpbmcoZHAoMTgpLCBkcCgxNCksIGRwKDE4KSwgZHAoMjYpKTsKICAgICAgICAgICAgYXJ0LnNldEltYWdlRHJhd2FibGUoaXRlbS5pY29uKTsKICAgICAgICAgICAgYXJ0LnNldEJhY2tncm91bmQoYXBwRmFsbGJhY2tHcmFkaWVudChpdGVtLnBrZykpOwogICAgICAgIH0KICAgICAgICBjYXJkLmFkZFZpZXcoYXJ0LCBuZXcgRnJhbWVMYXlvdXQuTGF5b3V0UGFyYW1zKC0xLC0xKSk7CgogICAgICAgIFZpZXcgc2hhZGUgPSBuZXcgVmlldyh0aGlzKTsKICAgICAgICBHcmFkaWVudERyYXdhYmxlIHNoYWRlQmcgPSBuZXcgR3JhZGllbnREcmF3YWJsZSgKICAgICAgICAgICAgICAgIEdyYWRpZW50RHJhd2FibGUuT3JpZW50YXRpb24uVE9QX0JPVFRPTSwKICAgICAgICAgICAgICAgIG5ldyBpbnRbXXsweDAwMDAwMDAwLCAweDIyMDAwMDAwLCAweEQ1MDAwMDAwfSk7CiAgICAgICAgc2hhZGUuc2V0QmFja2dyb3VuZChzaGFkZUJnKTsKICAgICAgICBjYXJkLmFkZFZpZXcoc2hhZGUsIG5ldyBGcmFtZUxheW91dC5MYXlvdXRQYXJhbXMoLTEsLTEpKTsKCiAgICAgICAgVGV4dFZpZXcgbmFtZSA9IGxhYmVsKGN1c3RvbUxhYmVsKGl0ZW0pLCAxNCwgQ29sb3IuV0hJVEUpOwogICAgICAgIG5hbWUuc2V0R3Jhdml0eShHcmF2aXR5LkxFRlQgfCBHcmF2aXR5LkJPVFRPTSk7CiAgICAgICAgbmFtZS5zZXRUeXBlZmFjZShudWxsLCBUeXBlZmFjZS5CT0xEKTsKICAgICAgICBuYW1lLnNldFNpbmdsZUxpbmUodHJ1ZSk7CiAgICAgICAgbmFtZS5zZXRFbGxpcHNpemUoYW5kcm9pZC50ZXh0LlRleHRVdGlscy5UcnVuY2F0ZUF0LkVORCk7CiAgICAgICAgbmFtZS5zZXRQYWRkaW5nKGRwKDEzKSwgMCwgZHAoMTMpLCBkcCgxMSkpOwogICAgICAgIGNhcmQuYWRkVmlldyhuYW1lLCBuZXcgRnJhbWVMYXlvdXQuTGF5b3V0UGFyYW1zKC0xLC0xKSk7CgogICAgICAgIGNhcmQuc2V0T25DbGlja0xpc3RlbmVyKHYgLT4gbGF1bmNoQXBwKGl0ZW0pKTsKICAgICAgICBjYXJkLnNldE9uTG9uZ0NsaWNrTGlzdGVuZXIodiAtPiB7CiAgICAgICAgICAgIHNob3dBcHBNZW51KGl0ZW0pOwogICAgICAgICAgICByZXR1cm4gdHJ1ZTsKICAgICAgICB9KTsKCiAgICAgICAgZm9jdXNCZWhhdmlvcigKICAgICAgICAgICAgICAgIGNhcmQsCiAgICAgICAgICAgICAgICBjdXN0b21MYWJlbChpdGVtKSwKICAgICAgICAgICAgICAgIGNhdGVnb3J5RGlzcGxheShpdGVtLmNhdGVnb3J5KSArICIg4oCiIHRpZW5pIHByZW11dG8gcGVyIGxlIG9wemlvbmkiCiAgICAgICAgKTsKICAgICAgICByZXR1cm4gY2FyZDsKICAgIH0KCicnJwogICAgaWYgbWFya2VyIG5vdCBpbiBzOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoIlB1bnRvIGRpIGluc2VyaW1lbnRvIGJhc2VGcmFtZUNhcmQgbm9uIHRyb3ZhdG8iKQogICAgcyA9IHMucmVwbGFjZShtYXJrZXIsIGJsb2NrICsgbWFya2VyLCAxKQogICAgcC53cml0ZV90ZXh0KHMsIGVuY29kaW5nPSJ1dGYtOCIpCiAgICBwcmludCgiTWV0b2RpIHJpZ2hlL3RpbGUgcmlwcmlzdGluYXRpIG5lbCBicmFuY2ggRVhQIik=' | base64 -d > /tmp/fix35exp.py
+          python3 /tmp/fix35exp.py
+
+      - name: Save experiment fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java
+          git diff --cached --quiet || git commit -m "Fix Foyho TV 3.5 EXP app rows"
+          git push origin HEAD:experiment-3.5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build experimental APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-3.5-EXP-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
