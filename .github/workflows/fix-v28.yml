@@ -1,0 +1,99 @@
+name: Fix Foyho TV 2.8
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fix Foyho TV 2.8 graphic upgrade
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+
+          if "import android.net.ConnectivityManager;" not in s:
+              s = s.replace(
+                  "import android.net.Uri;\n",
+                  "import android.net.Uri;\n"
+                  "import android.net.ConnectivityManager;\n"
+                  "import android.net.Network;\n"
+                  "import android.net.NetworkCapabilities;\n",
+                  1
+              )
+
+          methods = '\n    private TextView topStatusIcon(String symbol, String title) {\n        TextView t = new TextView(this);\n        t.setText(symbol);\n        t.setTextSize(17);\n        t.setTypeface(Typeface.DEFAULT_BOLD);\n        t.setTextColor(Color.WHITE);\n        t.setGravity(Gravity.CENTER);\n        t.setFocusable(true);\n        t.setClickable(true);\n\n        GradientDrawable bg = new GradientDrawable();\n        bg.setColor(0x4420C45C);\n        bg.setCornerRadius(dp(12));\n        bg.setStroke(dp(1), 0x7758FF89);\n        t.setBackground(bg);\n        t.setPadding(dp(10), dp(6), dp(10), dp(6));\n\n        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);\n        lp.setMargins(0, 0, dp(8), 0);\n        t.setLayoutParams(lp);\n\n        t.setOnFocusChangeListener((v, focused) -> {\n            v.animate()\n                    .scaleX(focused ? 1.10f : 1f)\n                    .scaleY(focused ? 1.10f : 1f)\n                    .setDuration(130)\n                    .start();\n\n            GradientDrawable g = new GradientDrawable();\n            g.setColor(focused ? 0xAA20C45C : 0x4420C45C);\n            g.setCornerRadius(dp(12));\n            g.setStroke(dp(focused ? 3 : 1),\n                    focused ? 0xFF39FF75 : 0x7758FF89);\n            v.setBackground(g);\n\n            if (Build.VERSION.SDK_INT >= 21) {\n                v.setElevation(dp(focused ? 12 : 4));\n            }\n\n            if (focused && focusTitle != null) {\n                focusTitle.setText(title);\n                focusSubtitle.setText("Scorciatoia barra superiore");\n            }\n        });\n\n        return t;\n    }\n\n    private void updateStatusIcons() {\n        if (networkIcon != null) {\n            int state = getNetworkState();\n            if (state == 2) {\n                networkIcon.setText("LAN");\n            } else if (state == 1) {\n                networkIcon.setText("Wi‑Fi");\n            } else {\n                networkIcon.setText("Offline");\n            }\n        }\n\n        if (notificationsIcon != null) notificationsIcon.setText("🔔");\n        if (inputsIcon != null) inputsIcon.setText("⇄");\n    }\n\n    private int getNetworkState() {\n        try {\n            ConnectivityManager cm =\n                    (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);\n            if (cm == null) return 0;\n\n            Network active = cm.getActiveNetwork();\n            if (active == null) return 0;\n\n            NetworkCapabilities caps = cm.getNetworkCapabilities(active);\n            if (caps == null) return 0;\n\n            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return 2;\n            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return 1;\n\n            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ? 1 : 0;\n        } catch(Exception ignored) {\n            return 0;\n        }\n    }\n\n    private void openNotificationsPanel() {\n        prefs.edit()\n                .putLong("override_pause_until", System.currentTimeMillis() + 10000L)\n                .apply();\n\n        try {\n            Intent i = new Intent(Settings.ACTION_NOTIFICATION_SETTINGS);\n            startActivity(i);\n        } catch(Exception e) {\n            safeStart(Settings.ACTION_SETTINGS);\n        }\n    }\n\n    private void startMatrixRain() {\n        if (matrixOverlay == null) return;\n\n        if (matrixRunnable != null) {\n            handler.removeCallbacks(matrixRunnable);\n        }\n\n        matrixRunnable = new Runnable() {\n            @Override public void run() {\n                if (matrixOverlay != null) {\n                    matrixOverlay.setText(buildMatrixText());\n\n                    float shift = -dp(matrixRandom.nextInt(14));\n                    matrixOverlay.animate()\n                            .translationY(shift)\n                            .alpha(0.16f + matrixRandom.nextFloat() * 0.08f)\n                            .setDuration(1600)\n                            .start();\n                }\n\n                handler.postDelayed(this, 1600);\n            }\n        };\n\n        handler.post(matrixRunnable);\n    }\n\n    private String buildMatrixText() {\n        String chars =\n                "01アイウエオカキクケコサシスセソABCDEFGHIJKLMNOPQRSTUVWXYZ";\n        StringBuilder out = new StringBuilder();\n\n        final int rows = 20;\n        final int cols = 42;\n\n        for (int r = 0; r < rows; r++) {\n            for (int c = 0; c < cols; c++) {\n                if (matrixRandom.nextInt(9) == 0) {\n                    out.append(chars.charAt(matrixRandom.nextInt(chars.length())));\n                } else {\n                    out.append(\' \');\n                }\n            }\n\n            if (r < rows - 1) out.append(\'\\n\');\n        }\n\n        return out.toString();\n    }\n\n'
+
+          if "private TextView topStatusIcon(" not in s:
+              marker = "    private void safeStart(String action) {\n"
+              if marker not in s:
+                  raise SystemExit("Punto di inserimento safeStart non trovato")
+              s = s.replace(marker, methods + marker, 1)
+
+          p.write_text(s, encoding="utf-8")
+
+          gpath = Path("app/build.gradle")
+          g = gpath.read_text(encoding="utf-8")
+          g = re.sub(r"versionCode\s+\d+", "versionCode 9", g, count=1)
+          g = re.sub(r"versionName\s+'[^']+'", "versionName '2.8.0'", g, count=1)
+          gpath.write_text(g, encoding="utf-8")
+
+          for check in [
+              "private TextView topStatusIcon(",
+              "private void updateStatusIcons()",
+              "private void startMatrixRain()",
+              "private void openNotificationsPanel()",
+              "import android.net.ConnectivityManager;",
+          ]:
+              if check not in s:
+                  raise SystemExit("Controllo fallito: " + check)
+
+          print("Correzione 2.8 applicata correttamente")
+          PY
+
+      - name: Save corrected Foyho TV 2.8 source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java app/build.gradle
+          git diff --cached --quiet || git commit -m "Fix Foyho TV 2.8"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.8-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
