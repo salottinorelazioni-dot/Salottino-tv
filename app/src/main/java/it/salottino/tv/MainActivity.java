@@ -23,6 +23,8 @@ public class MainActivity extends Activity {
     private static final int REQ_WALLPAPER = 101;
     private static final int REQ_LOCAL_VIDEO = 102;
     private static final int REQ_HOME_ROLE = 103;
+    private static final int REQ_BACKUP_EXPORT = 104;
+    private static final int REQ_BACKUP_IMPORT = 105;
 
     private SharedPreferences prefs;
     private FrameLayout root;
@@ -42,8 +44,9 @@ public class MainActivity extends Activity {
 
     static class WatchItem {
         String title, subtitle, intentUri, posterUri;
-        WatchItem(String t, String s, String i, String p) {
-            title=t; subtitle=s; intentUri=i; posterUri=p;
+        int progress;
+        WatchItem(String t, String s, String i, String p, int pr) {
+            title=t; subtitle=s; intentUri=i; posterUri=p; progress=pr;
         }
     }
 
@@ -160,8 +163,12 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, -2);
         ap.setMargins(dp(16), dp(3), dp(8), dp(3));
 
-        TextView settings = headerAction("⚙", "Impostazioni Foyho", "Sfondo, meteo, launcher e altre opzioni");
-        settings.setOnClickListener(v -> showSettings());
+        TextView search = headerAction("⌕", "Cerca app", "Cerca rapidamente tra tutte le app installate");
+        search.setOnClickListener(v -> showAppSearch());
+        actions.addView(search);
+
+        TextView settings = headerAction("⚙", "Centro di controllo", "Wi-Fi, Bluetooth, ingressi, audio, backup e impostazioni");
+        settings.setOnClickListener(v -> showControlCenter());
         actions.addView(settings);
 
         header.addView(actions, ap);
@@ -202,11 +209,12 @@ public class MainActivity extends Activity {
             WatchItem item = list.get(x);
             row.addView(createWatchCard(item), wideCardParams());
         }
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(188)));
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(214)));
     }
 
     private View createWatchCard(WatchItem item) {
         FrameLayout card = baseFrameCard();
+
         ImageView art = new ImageView(this);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         if (item.posterUri != null) {
@@ -217,23 +225,50 @@ public class MainActivity extends Activity {
         View shade = new View(this);
         GradientDrawable gd = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0xCC000000});
+                new int[]{0x00000000, 0x22000000, 0xDD000000});
         shade.setBackground(gd);
         card.addView(shade, new FrameLayout.LayoutParams(-1,-1));
+
+        TextView chip = label("CONTINUA", 10, 0xFF07120B);
+        chip.setTypeface(null, Typeface.BOLD);
+        chip.setGravity(Gravity.CENTER);
+        GradientDrawable chipBg = new GradientDrawable();
+        chipBg.setColor(0xEE58FF89);
+        chipBg.setCornerRadius(dp(10));
+        chip.setBackground(chipBg);
+        FrameLayout.LayoutParams chipLp = new FrameLayout.LayoutParams(dp(78), dp(24), Gravity.TOP | Gravity.LEFT);
+        chipLp.setMargins(dp(12), dp(12), 0, 0);
+        card.addView(chip, chipLp);
 
         LinearLayout textBox = new LinearLayout(this);
         textBox.setOrientation(LinearLayout.VERTICAL);
         textBox.setGravity(Gravity.BOTTOM);
-        textBox.setPadding(dp(14), dp(12), dp(14), dp(12));
+        textBox.setPadding(dp(14), dp(12), dp(14), item.progress >= 0 ? dp(20) : dp(12));
         TextView t = label(item.title == null ? "Continua a guardare" : item.title, 16, Color.WHITE);
         t.setTypeface(null, Typeface.BOLD);
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        TextView s = label(item.subtitle == null ? "Guarda successivo" : item.subtitle, 12, 0xFFD2D6DB);
-        s.setSingleLine(true);
+        String subText = item.subtitle == null ? "Guarda successivo" : item.subtitle;
+        if (item.progress >= 0) subText += "  •  " + item.progress + "%";
+        TextView sub = label(subText, 12, 0xFFD2D6DB);
+        sub.setSingleLine(true);
+        sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         textBox.addView(t);
-        textBox.addView(s);
+        textBox.addView(sub);
         card.addView(textBox, new FrameLayout.LayoutParams(-1,-1));
+
+        if (item.progress >= 0) {
+            ProgressBar pb = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            pb.setMax(100);
+            pb.setProgress(item.progress);
+            if (Build.VERSION.SDK_INT >= 21) {
+                pb.setProgressTintList(android.content.res.ColorStateList.valueOf(0xFF58FF89));
+                pb.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x553A4C40));
+            }
+            FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(-1, dp(4), Gravity.BOTTOM);
+            pp.setMargins(dp(12), 0, dp(12), dp(8));
+            card.addView(pb, pp);
+        }
 
         card.setOnClickListener(v -> {
             if (item.intentUri != null) {
@@ -242,75 +277,6 @@ public class MainActivity extends Activity {
             }
         });
         focusBehavior(card, t.getText().toString(), "Guarda successivo");
-        return card;
-    }
-
-    private void addAppRowIfAny(String title, List<AppItem> list) {
-        if (!list.isEmpty()) addAppRow(title, list);
-    }
-
-    private void addAppRow(String title, List<AppItem> list) {
-        addRowTitle(title);
-
-        HorizontalScrollView hsv = new HorizontalScrollView(this);
-        hsv.setHorizontalScrollBarEnabled(false);
-        hsv.setClipChildren(false);
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setClipChildren(false);
-        row.setPadding(dp(3), dp(8), dp(3), dp(18));
-        hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
-
-        for (AppItem item : list) row.addView(createAppCard(item), mediumAppCardParams());
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(170)));
-    }
-
-    private void addRowTitle(String title) {
-        TextView rowTitle = label(title, 19, Color.WHITE);
-        rowTitle.setTypeface(null, Typeface.BOLD);
-        LinearLayout.LayoutParams rtp = new LinearLayout.LayoutParams(-1,-2);
-        rtp.setMargins(0, dp(10), 0, dp(7));
-        content.addView(rowTitle, rtp);
-    }
-
-    private View createAppCard(AppItem item) {
-        FrameLayout card = baseFrameCard();
-
-        ImageView art = new ImageView(this);
-        if (item.banner != null) {
-            art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            art.setImageDrawable(item.banner);
-        } else {
-            art.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-            art.setPadding(dp(18), dp(14), dp(18), dp(26));
-            art.setImageDrawable(item.icon);
-            art.setBackground(appFallbackGradient(item.pkg));
-        }
-        card.addView(art, new FrameLayout.LayoutParams(-1,-1));
-
-        View shade = new View(this);
-        GradientDrawable shadeBg = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0x22000000, 0xD5000000});
-        shade.setBackground(shadeBg);
-        card.addView(shade, new FrameLayout.LayoutParams(-1,-1));
-
-        TextView name = label(customLabel(item), 14, Color.WHITE);
-        name.setGravity(Gravity.LEFT | Gravity.BOTTOM);
-        name.setTypeface(null, Typeface.BOLD);
-        name.setSingleLine(true);
-        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        name.setPadding(dp(13), 0, dp(13), dp(11));
-        card.addView(name, new FrameLayout.LayoutParams(-1,-1));
-
-        card.setOnClickListener(v -> launchApp(item));
-        card.setOnLongClickListener(v -> {
-            showAppMenu(item);
-            return true;
-        });
-
-        focusBehavior(card, customLabel(item), categoryDisplay(item.category) + " • tieni premuto per le opzioni");
         return card;
     }
 
@@ -381,14 +347,39 @@ public class MainActivity extends Activity {
 
     private void focusBehavior(View view, String title, String subtitle) {
         view.setOnFocusChangeListener((v, focused) -> {
+            ViewParent parent = v.getParent();
+            if (parent instanceof ViewGroup) {
+                ViewGroup group = (ViewGroup) parent;
+                int selected = group.indexOfChild(v);
+                for (int i=0; i<group.getChildCount(); i++) {
+                    View sibling = group.getChildAt(i);
+                    if (sibling == v) continue;
+                    float tilt = i < selected ? 4.5f : -4.5f;
+                    sibling.animate()
+                            .scaleX(focused ? 0.96f : 1f)
+                            .scaleY(focused ? 0.96f : 1f)
+                            .alpha(focused ? 0.74f : 1f)
+                            .rotationY(focused ? tilt : 0f)
+                            .setDuration(165)
+                            .start();
+                    if (Build.VERSION.SDK_INT >= 21 && !focused) {
+                        sibling.setTranslationZ(0f);
+                    }
+                }
+            }
+
             v.animate()
-                    .scaleX(focused ? 1.09f : 1f)
-                    .scaleY(focused ? 1.09f : 1f)
-                    .setDuration(120)
+                    .scaleX(focused ? 1.20f : 1f)
+                    .scaleY(focused ? 1.20f : 1f)
+                    .translationY(focused ? -dp(7) : 0f)
+                    .rotationX(focused ? 2.5f : 0f)
+                    .alpha(1f)
+                    .setDuration(165)
                     .start();
 
             if (Build.VERSION.SDK_INT >= 21) {
-                v.setElevation(dp(focused ? 14 : 5));
+                v.setElevation(dp(focused ? 30 : 5));
+                v.setTranslationZ(dp(focused ? 18 : 0));
             }
 
             if (Build.VERSION.SDK_INT >= 23 && v instanceof FrameLayout) {
@@ -459,29 +450,43 @@ public class MainActivity extends Activity {
                     null, Shader.TileMode.CLAMP));
             c.drawRect(0,0,w,h,bg);
 
+            boolean animate = prefs.getBoolean("matrix_anim", true);
+            int intensity = prefs.getInt("matrix_intensity", 1);
+            intensity = Math.max(0, Math.min(2, intensity));
+            float intensityMul = intensity == 0 ? 0.62f : (intensity == 2 ? 1.18f : 0.88f);
+
             Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
-            glow.setColor(0x1438FF7A);
+            glow.setColor(0x1638FF7A);
             c.drawCircle(w*.18f, h*.32f, h*.34f, glow);
-            glow.setColor(0x1223C96A);
+            glow.setColor(0x1423C96A);
             c.drawCircle(w*.78f, h*.72f, h*.42f, glow);
-            glow.setColor(0x101A4DFF);
+            glow.setColor(0x111A4DFF);
             c.drawCircle(w*.58f, h*.28f, h*.28f, glow);
+
+            long now = SystemClock.uptimeMillis();
+            float phase = animate ? ((now % 9500L) / 9500f) : 0f;
 
             paint.setTypeface(Typeface.MONOSPACE);
             paint.setTextSize(Math.max(15, w/105f));
-            float stepX = Math.max(27, w/50f);
+            float stepX = Math.max(25, w / (intensity == 2 ? 56f : (intensity == 0 ? 44f : 50f)));
             float stepY = paint.getTextSize()*1.35f;
             String chars = "01アイウエオカキクケコサシスセソABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
             random.setSeed(2202);
-            for (float x=0; x<w; x+=stepX) {
+            int column = 0;
+            for (float x=0; x<w; x+=stepX, column++) {
                 float start = -random.nextInt(Math.max(1,h/2));
                 int len = 14 + random.nextInt(24);
+                float speed = 0.55f + (column % 5) * 0.09f;
+                float flow = phase * h * speed;
                 for (int i=0;i<len;i++) {
-                    float y = start + i*stepY;
-                    if (y < -stepY || y > h+stepY) continue;
+                    float y = start + i*stepY + flow;
+                    float span = h + stepY * 8f;
+                    while (y > h + stepY) y -= span;
+                    while (y < -stepY) y += span;
                     char ch = chars.charAt(random.nextInt(chars.length()));
-                    int alpha = Math.max(14, 115 - i*4);
+                    int alpha = (int)(Math.max(14, 115 - i*4) * intensityMul);
+                    alpha = Math.max(8, Math.min(150, alpha));
                     paint.setColor(Color.argb(alpha, 70, 255, 120));
                     c.drawText(String.valueOf(ch), x, y, paint);
                 }
@@ -496,6 +501,8 @@ public class MainActivity extends Activity {
             brand.setTextSize(Math.min(w*.055f, h*.09f));
             brand.setColor(0x2458FF89);
             c.drawText("TV", w*.94f, h*.72f, brand);
+
+            if (animate) postInvalidateDelayed(80);
         }
     }
 
@@ -579,9 +586,34 @@ public class MainActivity extends Activity {
     }
 
     private List<AppItem> favoriteApps() {
-        Set<String> fav = getSet("favorites");
+        Set<String> manual = getSet("favorites");
         List<AppItem> out = new ArrayList<>();
-        for (AppItem a : apps) if (fav.contains(a.pkg)) out.add(a);
+
+        for (AppItem a : apps) {
+            if (manual.contains(a.pkg)) out.add(a);
+        }
+
+        List<AppItem> ranked = new ArrayList<>();
+        for (AppItem a : apps) {
+            if (manual.contains(a.pkg)) continue;
+            long uses = prefs.getLong("use_count_"+a.pkg, 0);
+            long last = prefs.getLong("last_"+a.pkg, 0);
+            if (uses > 0 || last > 0) ranked.add(a);
+        }
+
+        Collections.sort(ranked, (a,b) -> {
+            long ua = prefs.getLong("use_count_"+a.pkg, 0);
+            long ub = prefs.getLong("use_count_"+b.pkg, 0);
+            if (ua != ub) return Long.compare(ub, ua);
+            return Long.compare(
+                    prefs.getLong("last_"+b.pkg, 0),
+                    prefs.getLong("last_"+a.pkg, 0));
+        });
+
+        for (AppItem a : ranked) {
+            if (out.size() >= 8) break;
+            out.add(a);
+        }
         return out;
     }
 
@@ -608,7 +640,9 @@ public class MainActivity extends Activity {
                     TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION,
                     TvContract.WatchNextPrograms.COLUMN_INTENT_URI,
                     TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI,
-                    TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS
+                    TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS,
+                    TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS,
+                    TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS
             };
             c = getContentResolver().query(
                     TvContract.WatchNextPrograms.CONTENT_URI,
@@ -617,14 +651,29 @@ public class MainActivity extends Activity {
             if (c != null) {
                 int t = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_TITLE);
                 int e = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_EPISODE_TITLE);
-                int s = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION);
-                int i = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_INTENT_URI);
+                int ds = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION);
+                int in = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_INTENT_URI);
                 int p = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI);
+                int dur = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS);
+                int pos = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS);
+
                 while (c.moveToNext() && out.size() < 12) {
                     String title = t >= 0 ? c.getString(t) : null;
                     String ep = e >= 0 ? c.getString(e) : null;
-                    String sub = ep != null && !ep.isEmpty() ? ep : (s >= 0 ? c.getString(s) : null);
-                    out.add(new WatchItem(title, sub, i >= 0 ? c.getString(i) : null, p >= 0 ? c.getString(p) : null));
+                    String sub = ep != null && !ep.isEmpty() ? ep : (ds >= 0 ? c.getString(ds) : null);
+                    int progress = -1;
+                    if (dur >= 0 && pos >= 0) {
+                        long duration = c.getLong(dur);
+                        long position = c.getLong(pos);
+                        if (duration > 0 && position >= 0) {
+                            progress = (int)Math.max(0, Math.min(100, (position * 100L) / duration));
+                        }
+                    }
+                    out.add(new WatchItem(
+                            title, sub,
+                            in >= 0 ? c.getString(in) : null,
+                            p >= 0 ? c.getString(p) : null,
+                            progress));
                 }
             }
         } catch(Exception ignored) {
@@ -636,7 +685,12 @@ public class MainActivity extends Activity {
     }
 
     private void launchApp(AppItem item) {
-        prefs.edit().putLong("last_"+item.pkg, System.currentTimeMillis()).apply();
+        long now = System.currentTimeMillis();
+        long count = prefs.getLong("use_count_"+item.pkg, 0) + 1;
+        prefs.edit()
+                .putLong("last_"+item.pkg, now)
+                .putLong("use_count_"+item.pkg, count)
+                .apply();
         try {
             Intent i = new Intent();
             i.setClassName(item.pkg, item.activity);
@@ -703,11 +757,340 @@ public class MainActivity extends Activity {
         loadApps(); buildHome();
     }
 
+    private TextView controlTile(String symbol, String title, Runnable action, Dialog dialog) {
+        TextView v = label(symbol + "\n" + title, 16, Color.WHITE);
+        v.setGravity(Gravity.CENTER);
+        v.setTypeface(Typeface.DEFAULT_BOLD);
+        v.setFocusable(true);
+        v.setClickable(true);
+        v.setPadding(dp(14), dp(14), dp(14), dp(14));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xD914241C);
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), 0x884CFF83);
+        v.setBackground(bg);
+
+        v.setOnClickListener(x -> {
+            dialog.dismiss();
+            action.run();
+        });
+        v.setOnFocusChangeListener((x, focused) -> {
+            x.animate()
+                    .scaleX(focused ? 1.07f : 1f)
+                    .scaleY(focused ? 1.07f : 1f)
+                    .translationY(focused ? -dp(3) : 0f)
+                    .setDuration(130)
+                    .start();
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(focused ? 0xEF176C37 : 0xD914241C);
+            g.setCornerRadius(dp(18));
+            g.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0x884CFF83);
+            x.setBackground(g);
+        });
+        return v;
+    }
+
+    private void addControlRow(LinearLayout panel, TextView left, TextView right) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setClipChildren(false);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(92), 1f);
+        lp.setMargins(dp(6), dp(6), dp(6), dp(6));
+        row.addView(left, lp);
+        row.addView(right, lp);
+        panel.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void showControlCenter() {
+        final Dialog dialog = new Dialog(this);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(22), dp(20), dp(22), dp(22));
+        panel.setClipChildren(false);
+
+        GradientDrawable panelBg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{0xF20A1510, 0xF20B1D16, 0xF2080D0B});
+        panelBg.setCornerRadius(dp(26));
+        panelBg.setStroke(dp(2), 0xAA58FF89);
+        panel.setBackground(panelBg);
+
+        TextView title = label("Centro di controllo", 24, Color.WHITE);
+        title.setTypeface(null, Typeface.BOLD);
+        TextView sub = label("Accessi rapidi Foyho TV", 13, 0xFF8EFFB0);
+        panel.addView(title);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1,-2);
+        sp.setMargins(0, dp(3), 0, dp(12));
+        panel.addView(sub, sp);
+
+        addControlRow(panel,
+                controlTile("⌕", "Cerca app", this::showAppSearch, dialog),
+                controlTile("◉", "Wi-Fi", () -> safeStart(Settings.ACTION_WIFI_SETTINGS), dialog));
+
+        addControlRow(panel,
+                controlTile("B", "Bluetooth", () -> safeStart("android.settings.BLUETOOTH_SETTINGS"), dialog),
+                controlTile("⇄", "Ingressi", () -> safeStart("android.settings.TV_INPUT_SETTINGS"), dialog));
+
+        addControlRow(panel,
+                controlTile("♪", "Audio", () -> safeStart("android.settings.SOUND_SETTINGS"), dialog),
+                controlTile("⚙", "Android", () -> safeStart(Settings.ACTION_SETTINGS), dialog));
+
+        addControlRow(panel,
+                controlTile("✦", "Personalizza Foyho", this::showSettings, dialog),
+                controlTile("↕", "Backup / Ripristino", this::showBackupMenu, dialog));
+
+        dialog.setContentView(panel);
+        dialog.show();
+        Window w = dialog.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            WindowManager.LayoutParams a = w.getAttributes();
+            a.dimAmount = 0.62f;
+            w.setAttributes(a);
+            w.setLayout(dp(720), WindowManager.LayoutParams.WRAP_CONTENT);
+            w.setGravity(Gravity.CENTER);
+        }
+    }
+
+    private void showAppSearch() {
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Nome app");
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(0xFF93A59A);
+        input.setPadding(dp(18), dp(12), dp(18), dp(12));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFF101B15);
+        bg.setCornerRadius(dp(16));
+        bg.setStroke(dp(2), 0xAA58FF89);
+        input.setBackground(bg);
+
+        AlertDialog d = new AlertDialog.Builder(this)
+                .setTitle("Cerca app")
+                .setView(input)
+                .setPositiveButton("Cerca", null)
+                .setNegativeButton("Annulla", null)
+                .create();
+        d.setOnShowListener(x -> d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String q = input.getText().toString().trim();
+            d.dismiss();
+            showSearchResults(q);
+        }));
+        d.show();
+    }
+
+    private void showSearchResults(String query) {
+        String q = query == null ? "" : query.toLowerCase(Locale.ROOT);
+        List<AppItem> found = new ArrayList<>();
+        for (AppItem a : apps) {
+            String hay = (customLabel(a) + " " + a.pkg + " " + categoryDisplay(a.category)).toLowerCase(Locale.ROOT);
+            if (q.isEmpty() || hay.contains(q)) found.add(a);
+        }
+
+        if (found.isEmpty()) {
+            Toast.makeText(this, "Nessuna app trovata", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] names = new String[found.size()];
+        for (int i=0; i<found.size(); i++) {
+            names[i] = customLabel(found.get(i)) + "  ·  " + categoryDisplay(found.get(i).category);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(q.isEmpty() ? "Tutte le app" : "Risultati")
+                .setItems(names, (d, which) -> launchApp(found.get(which)))
+                .setNegativeButton("Chiudi", null)
+                .show();
+    }
+
+    private void showBackupMenu() {
+        String[] items = {"Esporta backup", "Ripristina da backup"};
+        new AlertDialog.Builder(this)
+                .setTitle("Backup Foyho TV")
+                .setItems(items, (d, which) -> {
+                    if (which == 0) exportBackup();
+                    else importBackup();
+                })
+                .setNegativeButton("Chiudi", null)
+                .show();
+    }
+
+    private void exportBackup() {
+        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        i.setType("application/json");
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.putExtra(Intent.EXTRA_TITLE, "Foyho-TV-backup.json");
+        startActivityForResult(i, REQ_BACKUP_EXPORT);
+    }
+
+    private void importBackup() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.setType("application/json");
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(i, REQ_BACKUP_IMPORT);
+    }
+
+    private byte[] readUriBytes(Uri uri, int maxBytes) throws Exception {
+        InputStream in;
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            in = new FileInputStream(new File(uri.getPath()));
+        } else {
+            in = getContentResolver().openInputStream(uri);
+        }
+        if (in == null) return null;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int total = 0, n;
+        try {
+            while ((n = in.read(buf)) > 0) {
+                total += n;
+                if (total > maxBytes) throw new IOException("File troppo grande");
+                out.write(buf, 0, n);
+            }
+        } finally {
+            in.close();
+        }
+        return out.toByteArray();
+    }
+
+    private void writeBackup(Uri uri) {
+        try {
+            JSONObject root = new JSONObject();
+            root.put("format", 1);
+            root.put("app", "Foyho TV");
+            root.put("created", System.currentTimeMillis());
+
+            JSONObject values = new JSONObject();
+            for (Map.Entry<String, ?> e : prefs.getAll().entrySet()) {
+                String key = e.getKey();
+                if ("weather_text".equals(key) || "weather_last".equals(key) || "override_pause_until".equals(key)) continue;
+                Object value = e.getValue();
+                JSONObject item = new JSONObject();
+
+                if (value instanceof String) {
+                    item.put("type", "string");
+                    item.put("value", value);
+                } else if (value instanceof Boolean) {
+                    item.put("type", "boolean");
+                    item.put("value", value);
+                } else if (value instanceof Integer) {
+                    item.put("type", "int");
+                    item.put("value", value);
+                } else if (value instanceof Long) {
+                    item.put("type", "long");
+                    item.put("value", value);
+                } else if (value instanceof Float) {
+                    item.put("type", "float");
+                    item.put("value", value);
+                } else if (value instanceof Set) {
+                    item.put("type", "set");
+                    JSONArray arr = new JSONArray();
+                    for (Object x : (Set<?>) value) arr.put(String.valueOf(x));
+                    item.put("value", arr);
+                } else {
+                    continue;
+                }
+                values.put(key, item);
+            }
+            root.put("preferences", values);
+
+            String wallpaper = prefs.getString("wallpaper_uri", null);
+            if (wallpaper != null && !wallpaper.isEmpty()) {
+                try {
+                    byte[] image = readUriBytes(Uri.parse(wallpaper), 12 * 1024 * 1024);
+                    if (image != null && image.length > 0) {
+                        root.put("wallpaper_data", android.util.Base64.encodeToString(image, android.util.Base64.NO_WRAP));
+                    }
+                } catch(Exception ignored) {}
+            }
+
+            OutputStream os = getContentResolver().openOutputStream(uri, "w");
+            if (os == null) throw new IOException("Impossibile aprire il file");
+            try {
+                os.write(root.toString(2).getBytes("UTF-8"));
+                os.flush();
+            } finally {
+                os.close();
+            }
+            Toast.makeText(this, "Backup Foyho TV esportato", Toast.LENGTH_LONG).show();
+        } catch(Exception e) {
+            Toast.makeText(this, "Errore backup: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void restoreBackup(Uri uri) {
+        try {
+            byte[] bytes = readUriBytes(uri, 20 * 1024 * 1024);
+            if (bytes == null) throw new IOException("Backup vuoto");
+            JSONObject root = new JSONObject(new String(bytes, "UTF-8"));
+            JSONObject values = root.getJSONObject("preferences");
+
+            SharedPreferences.Editor ed = prefs.edit().clear();
+            Iterator<String> keys = values.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                JSONObject item = values.getJSONObject(key);
+                String type = item.getString("type");
+                if ("string".equals(type)) ed.putString(key, item.optString("value", ""));
+                else if ("boolean".equals(type)) ed.putBoolean(key, item.optBoolean("value", false));
+                else if ("int".equals(type)) ed.putInt(key, item.optInt("value", 0));
+                else if ("long".equals(type)) ed.putLong(key, item.optLong("value", 0L));
+                else if ("float".equals(type)) ed.putFloat(key, (float)item.optDouble("value", 0d));
+                else if ("set".equals(type)) {
+                    JSONArray arr = item.optJSONArray("value");
+                    Set<String> set = new LinkedHashSet<>();
+                    if (arr != null) for (int i=0; i<arr.length(); i++) set.add(arr.optString(i));
+                    ed.putStringSet(key, set);
+                }
+            }
+            ed.apply();
+
+            String encoded = root.optString("wallpaper_data", "");
+            if (!encoded.isEmpty()) {
+                byte[] image = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT);
+                File f = new File(getFilesDir(), "restored_wallpaper.img");
+                FileOutputStream fos = new FileOutputStream(f);
+                try { fos.write(image); } finally { fos.close(); }
+                prefs.edit().putString("wallpaper_uri", Uri.fromFile(f).toString()).apply();
+            }
+
+            prefs.edit().remove("weather_text").remove("weather_last").apply();
+            loadApps();
+            buildHome();
+            updateClock();
+            updateWeather();
+            Toast.makeText(this, "Backup ripristinato", Toast.LENGTH_LONG).show();
+        } catch(Exception e) {
+            Toast.makeText(this, "Backup non valido: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void chooseMatrixIntensity() {
+        String[] items = {"Leggera", "Media", "Forte"};
+        int current = prefs.getInt("matrix_intensity", 1);
+        new AlertDialog.Builder(this)
+                .setTitle("Intensità Matrix")
+                .setSingleChoiceItems(items, current, (d, which) -> {
+                    prefs.edit().putInt("matrix_intensity", which).apply();
+                    d.dismiss();
+                    buildHome();
+                    updateWeather();
+                })
+                .show();
+    }
+
     private void showSettings() {
         boolean overrideActive = prefs.getBoolean("override_launcher", false) && isFoyhoAccessibilityEnabled();
+        boolean matrixAnim = prefs.getBoolean("matrix_anim", true);
         String[] options = {
                 "Scegli sfondo personale",
                 "Ripristina sfondo Foyho",
+                "Animazione Matrix: " + (matrixAnim ? "ATTIVA" : "DISATTIVA"),
+                "Intensità Matrix",
                 "Città meteo",
                 "Imposta Foyho TV come Home",
                 "Sostituisci il launcher corrente: " + (overrideActive ? "ATTIVO" : "DISATTIVO"),
@@ -722,11 +1105,16 @@ public class MainActivity extends Activity {
                         prefs.edit().remove("wallpaper_uri").apply();
                         buildHome();
                         updateWeather();
-                    } else if (which == 2) showWeatherCityDialog();
-                    else if (which == 3) requestDefaultHome();
-                    else if (which == 4) showLauncherOverrideDialog();
-                    else if (which == 5) chooseDim();
-                    else if (which == 6) showHiddenApps();
+                    } else if (which == 2) {
+                        prefs.edit().putBoolean("matrix_anim", !matrixAnim).apply();
+                        buildHome();
+                        updateWeather();
+                    } else if (which == 3) chooseMatrixIntensity();
+                    else if (which == 4) showWeatherCityDialog();
+                    else if (which == 5) requestDefaultHome();
+                    else if (which == 6) showLauncherOverrideDialog();
+                    else if (which == 7) chooseDim();
+                    else if (which == 8) showHiddenApps();
                 }).show();
     }
 
@@ -1028,7 +1416,7 @@ public class MainActivity extends Activity {
         row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), mediumAppCardParams());
         row.addView(systemCard("Impostazioni","⚙", v -> safeStart(Settings.ACTION_SETTINGS)), mediumAppCardParams());
         row.addView(systemCard("Altre app","⋯", v -> showOtherApps()), mediumAppCardParams());
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(170)));
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(198)));
     }
 
     private void showOtherApps() {
@@ -1100,6 +1488,15 @@ public class MainActivity extends Activity {
         if (result != RESULT_OK || data == null) return;
         Uri uri = data.getData();
         if (uri == null) return;
+
+        if (req == REQ_BACKUP_EXPORT) {
+            writeBackup(uri);
+            return;
+        }
+        if (req == REQ_BACKUP_IMPORT) {
+            restoreBackup(uri);
+            return;
+        }
 
         if (req == REQ_WALLPAPER) {
             try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }

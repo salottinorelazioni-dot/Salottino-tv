@@ -5,11 +5,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'it.salottino.tv'
+        applicationId 'it.salottino.tv.exp'
         minSdk 21
         targetSdk 35
-        versionCode 14
-        versionName '3.4.0'
+        versionCode 15
+        versionName '3.5.0-exp'
     }
 
     compileOptions {
