@@ -1,0 +1,54 @@
+name: Upgrade Foyho TV 2.4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade-build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply Foyho TV 2.4
+        shell: bash
+        run: |
+          echo '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' | base64 -d | gzip -d > /tmp/foyho24.py
+          python3 /tmp/foyho24.py
+
+      - name: Save source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git diff --cached --quiet || git commit -m "Upgrade to Foyho TV 2.4"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.4-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
