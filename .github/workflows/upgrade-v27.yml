@@ -1,0 +1,205 @@
+name: Upgrade Foyho TV 2.7
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply aggressive HOME and TV banner
+        shell: bash
+        run: |
+          cat > app/src/main/java/it/salottino/tv/FoyhoAccessibilityService.java <<'EOF'
+          package it.salottino.tv;
+
+          import android.accessibilityservice.AccessibilityService;
+          import android.accessibilityservice.AccessibilityServiceInfo;
+          import android.content.ComponentName;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.content.pm.ResolveInfo;
+          import android.os.SystemClock;
+          import android.view.KeyEvent;
+          import android.view.accessibility.AccessibilityEvent;
+          import java.util.List;
+
+          public class FoyhoAccessibilityService extends AccessibilityService {
+              private long lastRedirect = 0L;
+
+              @Override
+              protected void onServiceConnected() {
+                  AccessibilityServiceInfo info = getServiceInfo();
+                  info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED |
+                          AccessibilityEvent.TYPE_WINDOWS_CHANGED;
+                  info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
+                  info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+                  info.notificationTimeout = 20;
+                  setServiceInfo(info);
+
+                  if (overrideEnabled() && !paused()) {
+                      redirectToFoyho();
+                  }
+              }
+
+              private SharedPreferences prefs() {
+                  return getSharedPreferences("salottino_tv", MODE_PRIVATE);
+              }
+
+              private boolean overrideEnabled() {
+                  return prefs().getBoolean("override_launcher", false);
+              }
+
+              private boolean paused() {
+                  return System.currentTimeMillis() < prefs().getLong("override_pause_until", 0L);
+              }
+
+              @Override
+              protected boolean onKeyEvent(KeyEvent event) {
+                  if (!overrideEnabled() || paused() || event == null) return false;
+
+                  if (event.getKeyCode() == KeyEvent.KEYCODE_HOME) {
+                      if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                          redirectToFoyho();
+                      }
+                      return true;
+                  }
+                  return false;
+              }
+
+              @Override
+              public void onAccessibilityEvent(AccessibilityEvent event) {
+                  if (!overrideEnabled() || paused() || event == null) return;
+
+                  int type = event.getEventType();
+                  if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+                          type != AccessibilityEvent.TYPE_WINDOWS_CHANGED) return;
+
+                  CharSequence packageName = event.getPackageName();
+                  if (packageName == null) return;
+
+                  String pkg = packageName.toString();
+                  if (pkg.equals(getPackageName()) || shouldIgnore(pkg)) return;
+
+                  if (isLauncherPackage(pkg)) {
+                      redirectToFoyho();
+                  }
+              }
+
+              private boolean shouldIgnore(String pkg) {
+                  String p = pkg.toLowerCase();
+                  return p.contains("settings") ||
+                          p.contains("permissioncontroller") ||
+                          p.contains("packageinstaller") ||
+                          p.contains("systemui");
+              }
+
+              private boolean isLauncherPackage(String pkg) {
+                  if ("com.spocky.projengmenu".equals(pkg)) return true;
+
+                  try {
+                      Intent home = new Intent(Intent.ACTION_MAIN);
+                      home.addCategory(Intent.CATEGORY_HOME);
+                      List<ResolveInfo> launchers = getPackageManager().queryIntentActivities(home, 0);
+                      for (ResolveInfo r : launchers) {
+                          if (r.activityInfo != null && pkg.equals(r.activityInfo.packageName)) {
+                              return true;
+                          }
+                      }
+                  } catch(Exception ignored) {}
+                  return false;
+              }
+
+              private void redirectToFoyho() {
+                  long now = SystemClock.elapsedRealtime();
+                  if (now - lastRedirect < 250L) return;
+                  lastRedirect = now;
+
+                  try {
+                      Intent i = new Intent(Intent.ACTION_MAIN);
+                      i.addCategory(Intent.CATEGORY_HOME);
+                      i.setComponent(new ComponentName(this, MainActivity.class));
+                      i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+                              Intent.FLAG_ACTIVITY_CLEAR_TOP |
+                              Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      startActivity(i);
+                  } catch(Exception ignored) {}
+              }
+
+              @Override
+              public void onInterrupt() {}
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          m = manifest.read_text(encoding="utf-8")
+
+          if 'android:banner="@drawable/foyho_banner"' not in m:
+              m = m.replace(
+                  'android:allowBackup="false"\n        android:label="Foyho TV"',
+                  'android:allowBackup="false"\n        android:banner="@drawable/foyho_banner"\n        android:label="Foyho TV"',
+                  1
+              )
+
+          if 'android:name=".MainActivity"\n            android:banner="@drawable/foyho_banner"' not in m:
+              m = m.replace(
+                  '<activity\n            android:name=".MainActivity"\n            android:exported="true"',
+                  '<activity\n            android:name=".MainActivity"\n            android:banner="@drawable/foyho_banner"\n            android:exported="true"',
+                  1
+              )
+
+          manifest.write_text(m, encoding="utf-8")
+
+          gradle = Path("app/build.gradle")
+          g = gradle.read_text(encoding="utf-8")
+          g = re.sub(r"versionCode\s+\d+", "versionCode 8", g, count=1)
+          g = re.sub(r"versionName\s+'[^']+'", "versionName '2.7.0'", g, count=1)
+          gradle.write_text(g, encoding="utf-8")
+          PY
+
+          mkdir -p app/src/main/res/drawable-nodpi
+          echo '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' | base64 -d > app/src/main/res/drawable-nodpi/foyho_banner.png
+
+      - name: Save Foyho TV 2.7 source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git diff --cached --quiet || git commit -m "Upgrade to Foyho TV 2.7"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.7-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
