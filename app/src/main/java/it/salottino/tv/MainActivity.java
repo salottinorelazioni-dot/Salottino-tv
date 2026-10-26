@@ -11,6 +11,9 @@ import android.graphics.*;
 import android.graphics.drawable.*;
 import android.media.tv.TvContract;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.view.*;
 import android.widget.*;
 import java.io.*;
@@ -1114,6 +1117,155 @@ public class MainActivity extends Activity {
         i.setType("video/*");
         i.addCategory(Intent.CATEGORY_OPENABLE);
         startActivityForResult(i, REQ_LOCAL_VIDEO);
+    }
+
+
+    private TextView topStatusIcon(String symbol, String title) {
+        TextView t = new TextView(this);
+        t.setText(symbol);
+        t.setTextSize(17);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Color.WHITE);
+        t.setGravity(Gravity.CENTER);
+        t.setFocusable(true);
+        t.setClickable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0x4420C45C);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), 0x7758FF89);
+        t.setBackground(bg);
+        t.setPadding(dp(10), dp(6), dp(10), dp(6));
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.setMargins(0, 0, dp(8), 0);
+        t.setLayoutParams(lp);
+
+        t.setOnFocusChangeListener((v, focused) -> {
+            v.animate()
+                    .scaleX(focused ? 1.10f : 1f)
+                    .scaleY(focused ? 1.10f : 1f)
+                    .setDuration(130)
+                    .start();
+
+            GradientDrawable g = new GradientDrawable();
+            g.setColor(focused ? 0xAA20C45C : 0x4420C45C);
+            g.setCornerRadius(dp(12));
+            g.setStroke(dp(focused ? 3 : 1),
+                    focused ? 0xFF39FF75 : 0x7758FF89);
+            v.setBackground(g);
+
+            if (Build.VERSION.SDK_INT >= 21) {
+                v.setElevation(dp(focused ? 12 : 4));
+            }
+
+            if (focused && focusTitle != null) {
+                focusTitle.setText(title);
+                focusSubtitle.setText("Scorciatoia barra superiore");
+            }
+        });
+
+        return t;
+    }
+
+    private void updateStatusIcons() {
+        if (networkIcon != null) {
+            int state = getNetworkState();
+            if (state == 2) {
+                networkIcon.setText("LAN");
+            } else if (state == 1) {
+                networkIcon.setText("Wi‑Fi");
+            } else {
+                networkIcon.setText("Offline");
+            }
+        }
+
+        if (notificationsIcon != null) notificationsIcon.setText("🔔");
+        if (inputsIcon != null) inputsIcon.setText("⇄");
+    }
+
+    private int getNetworkState() {
+        try {
+            ConnectivityManager cm =
+                    (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (cm == null) return 0;
+
+            Network active = cm.getActiveNetwork();
+            if (active == null) return 0;
+
+            NetworkCapabilities caps = cm.getNetworkCapabilities(active);
+            if (caps == null) return 0;
+
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return 2;
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return 1;
+
+            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ? 1 : 0;
+        } catch(Exception ignored) {
+            return 0;
+        }
+    }
+
+    private void openNotificationsPanel() {
+        prefs.edit()
+                .putLong("override_pause_until", System.currentTimeMillis() + 10000L)
+                .apply();
+
+        try {
+            Intent i = new Intent(Settings.ACTION_NOTIFICATION_SETTINGS);
+            startActivity(i);
+        } catch(Exception e) {
+            safeStart(Settings.ACTION_SETTINGS);
+        }
+    }
+
+    private void startMatrixRain() {
+        if (matrixOverlay == null) return;
+
+        if (matrixRunnable != null) {
+            handler.removeCallbacks(matrixRunnable);
+        }
+
+        matrixRunnable = new Runnable() {
+            @Override public void run() {
+                if (matrixOverlay != null) {
+                    matrixOverlay.setText(buildMatrixText());
+
+                    float shift = -dp(matrixRandom.nextInt(14));
+                    matrixOverlay.animate()
+                            .translationY(shift)
+                            .alpha(0.16f + matrixRandom.nextFloat() * 0.08f)
+                            .setDuration(1600)
+                            .start();
+                }
+
+                handler.postDelayed(this, 1600);
+            }
+        };
+
+        handler.post(matrixRunnable);
+    }
+
+    private String buildMatrixText() {
+        String chars =
+                "01アイウエオカキクケコサシスセソABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        StringBuilder out = new StringBuilder();
+
+        final int rows = 20;
+        final int cols = 42;
+
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                if (matrixRandom.nextInt(9) == 0) {
+                    out.append(chars.charAt(matrixRandom.nextInt(chars.length())));
+                } else {
+                    out.append(' ');
+                }
+            }
+
+            if (r < rows - 1) out.append('\n');
+        }
+
+        return out.toString();
     }
 
     private void safeStart(String action) {
