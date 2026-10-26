@@ -1,0 +1,46 @@
+name: Fix Upgrade Foyho TV 2.5
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixed 2.5
+        shell: bash
+        run: |
+          echo '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' | base64 -d | gzip -d > /tmp/fix25.py
+          python3 /tmp/fix25.py
+      - name: Save source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git diff --cached --quiet || git commit -m "Upgrade to Foyho TV 2.5"
+          git push
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.5-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
