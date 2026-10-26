@@ -280,6 +280,84 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    private void addAppRowIfAny(String title, List<AppItem> list) {
+        if (!list.isEmpty()) addAppRow(title, list);
+    }
+
+    private void addAppRow(String title, List<AppItem> list) {
+        addRowTitle(title);
+
+        HorizontalScrollView hsv = new HorizontalScrollView(this);
+        hsv.setHorizontalScrollBarEnabled(false);
+        hsv.setClipChildren(false);
+        hsv.setClipToPadding(false);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setClipChildren(false);
+        row.setClipToPadding(false);
+        row.setPadding(dp(18), dp(16), dp(18), dp(28));
+        hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
+
+        for (AppItem item : list) {
+            row.addView(createAppCard(item), mediumAppCardParams());
+        }
+
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(198)));
+    }
+
+    private void addRowTitle(String title) {
+        TextView rowTitle = label(title, 19, Color.WHITE);
+        rowTitle.setTypeface(null, Typeface.BOLD);
+        LinearLayout.LayoutParams rtp = new LinearLayout.LayoutParams(-1,-2);
+        rtp.setMargins(0, dp(10), 0, dp(7));
+        content.addView(rowTitle, rtp);
+    }
+
+    private View createAppCard(AppItem item) {
+        FrameLayout card = baseFrameCard();
+
+        ImageView art = new ImageView(this);
+        if (item.banner != null) {
+            art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            art.setImageDrawable(item.banner);
+        } else {
+            art.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            art.setPadding(dp(18), dp(14), dp(18), dp(26));
+            art.setImageDrawable(item.icon);
+            art.setBackground(appFallbackGradient(item.pkg));
+        }
+        card.addView(art, new FrameLayout.LayoutParams(-1,-1));
+
+        View shade = new View(this);
+        GradientDrawable shadeBg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0x22000000, 0xD5000000});
+        shade.setBackground(shadeBg);
+        card.addView(shade, new FrameLayout.LayoutParams(-1,-1));
+
+        TextView name = label(customLabel(item), 14, Color.WHITE);
+        name.setGravity(Gravity.LEFT | Gravity.BOTTOM);
+        name.setTypeface(null, Typeface.BOLD);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        name.setPadding(dp(13), 0, dp(13), dp(11));
+        card.addView(name, new FrameLayout.LayoutParams(-1,-1));
+
+        card.setOnClickListener(v -> launchApp(item));
+        card.setOnLongClickListener(v -> {
+            showAppMenu(item);
+            return true;
+        });
+
+        focusBehavior(
+                card,
+                customLabel(item),
+                categoryDisplay(item.category) + " • tieni premuto per le opzioni"
+        );
+        return card;
+    }
+
     private FrameLayout baseFrameCard() {
         FrameLayout card = new FrameLayout(this);
         card.setFocusable(true);
