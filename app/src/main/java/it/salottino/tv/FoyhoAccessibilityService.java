@@ -21,8 +21,12 @@ public class FoyhoAccessibilityService extends AccessibilityService {
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED;
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
-        info.notificationTimeout = 50;
+        info.notificationTimeout = 20;
         setServiceInfo(info);
+
+        if (overrideEnabled() && !paused()) {
+            redirectToFoyho();
+        }
     }
 
     private SharedPreferences prefs() {
@@ -39,11 +43,12 @@ public class FoyhoAccessibilityService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
-        if (!overrideEnabled() || paused()) return false;
+        if (!overrideEnabled() || paused() || event == null) return false;
 
-        if (event.getKeyCode() == KeyEvent.KEYCODE_HOME &&
-                event.getAction() == KeyEvent.ACTION_UP) {
-            redirectToFoyho();
+        if (event.getKeyCode() == KeyEvent.KEYCODE_HOME) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                redirectToFoyho();
+            }
             return true;
         }
         return false;
@@ -94,7 +99,7 @@ public class FoyhoAccessibilityService extends AccessibilityService {
 
     private void redirectToFoyho() {
         long now = SystemClock.elapsedRealtime();
-        if (now - lastRedirect < 500L) return;
+        if (now - lastRedirect < 250L) return;
         lastRedirect = now;
 
         try {
