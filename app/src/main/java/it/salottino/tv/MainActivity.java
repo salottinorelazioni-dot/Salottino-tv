@@ -81,7 +81,11 @@ public class MainActivity extends Activity {
 
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(48), dp(28), dp(48), dp(42));
+        content.setClipChildren(false);
+        content.setClipToPadding(false);
+        content.setPadding(dp(24), dp(20), dp(14), dp(34));
+        scroll.setClipChildren(false);
+        scroll.setClipToPadding(false);
         scroll.addView(content, new ScrollView.LayoutParams(-1, -2));
 
         buildHeader();
@@ -115,6 +119,8 @@ public class MainActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setClipChildren(false);
+        header.setClipToPadding(false);
 
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
@@ -152,8 +158,8 @@ public class MainActivity extends Activity {
         header.addView(timeBox);
 
         Button customize = smallButton("Personalizza");
-        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(dp(156), dp(52));
-        cbp.setMargins(dp(24),0,0,0);
+        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(dp(164), dp(50));
+        cbp.setMargins(dp(20), dp(5), dp(10), dp(5));
         customize.setOnClickListener(v -> showSettings());
         customize.setOnFocusChangeListener((v, focused) -> {
             v.animate()
@@ -162,7 +168,7 @@ public class MainActivity extends Activity {
                     .setDuration(120)
                     .start();
             GradientDrawable g = new GradientDrawable();
-            g.setColor(focused ? 0xAA25C95A : 0x5534D96B);
+            g.setColor(focused ? 0xFF16C95A : 0x7734D96B);
             g.setCornerRadius(dp(18));
             g.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0xAA58FF89);
             v.setBackground(g);
@@ -268,8 +274,8 @@ public class MainActivity extends Activity {
         row.setPadding(dp(3), dp(8), dp(3), dp(18));
         hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
 
-        for (AppItem item : list) row.addView(createAppCard(item), appCardParams());
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, cardHeight()+dp(30)));
+        for (AppItem item : list) row.addView(createAppCard(item), appCardParams(list.size()));
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, responsiveCardHeight(list.size())+dp(30)));
     }
 
     private void addRowTitle(String title) {
@@ -342,8 +348,35 @@ public class MainActivity extends Activity {
 
     private LinearLayout.LayoutParams appCardParams() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(cardWidth(), cardHeight());
-        lp.setMargins(0,0,dp(16),0);
+        lp.setMargins(0,0,dp(14),0);
         return lp;
+    }
+
+    private LinearLayout.LayoutParams appCardParams(int itemCount) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                responsiveCardWidth(itemCount),
+                responsiveCardHeight(itemCount));
+        lp.setMargins(0,0,dp(14),0);
+        return lp;
+    }
+
+    private int responsiveCardWidth(int itemCount) {
+        int screen = getResources().getDisplayMetrics().widthPixels;
+        int available = Math.max(dp(640), screen - dp(52));
+        int size = prefs.getInt("card_size", 1);
+
+        int columns = size == 0 ? 5 : (size == 2 ? 3 : 4);
+        if (itemCount == 1) columns = 3;
+        else if (itemCount > 1 && itemCount < columns) columns = itemCount;
+
+        int gaps = dp(14) * Math.max(0, columns - 1);
+        return Math.max(dp(180), (available - gaps) / columns);
+    }
+
+    private int responsiveCardHeight(int itemCount) {
+        int size = prefs.getInt("card_size", 1);
+        int max = size == 0 ? dp(126) : (size == 2 ? dp(190) : dp(165));
+        return Math.min(max, (int)(responsiveCardWidth(itemCount) * 0.60f));
     }
 
     private LinearLayout.LayoutParams wideCardParams() {
@@ -652,11 +685,13 @@ public class MainActivity extends Activity {
     }
 
     private void showSettings() {
+        boolean overrideActive = prefs.getBoolean("override_launcher", false) && isFoyhoAccessibilityEnabled();
         String[] options = {
                 "Scegli sfondo personale",
                 "Ripristina sfondo Foyho",
                 "Città meteo",
                 "Imposta Foyho TV come Home",
+                "Sostituisci il launcher corrente: " + (overrideActive ? "ATTIVO" : "DISATTIVO"),
                 "Dimensione tile",
                 "Oscuramento sfondo",
                 "Mostra app nascoste"
@@ -671,10 +706,78 @@ public class MainActivity extends Activity {
                         updateWeather();
                     } else if (which == 2) showWeatherCityDialog();
                     else if (which == 3) requestDefaultHome();
-                    else if (which == 4) chooseCardSize();
-                    else if (which == 5) chooseDim();
-                    else if (which == 6) showHiddenApps();
+                    else if (which == 4) showLauncherOverrideDialog();
+                    else if (which == 5) chooseCardSize();
+                    else if (which == 6) chooseDim();
+                    else if (which == 7) showHiddenApps();
                 }).show();
+    }
+
+    private void showLauncherOverrideDialog() {
+        boolean requested = prefs.getBoolean("override_launcher", false);
+        boolean serviceEnabled = isFoyhoAccessibilityEnabled();
+        boolean projectivyAccessibility = isAccessibilityPackageEnabled("com.spocky.projengmenu");
+
+        String status = requested && serviceEnabled
+                ? "ATTIVO"
+                : (requested ? "DA ABILITARE IN ACCESSIBILITÀ" : "DISATTIVO");
+
+        String message = "Stato: " + status +
+                "\n\nQuando è attivo, Foyho TV intercetta il ritorno a un altro launcher e riporta automaticamente alla Home Foyho.";
+
+        if (projectivyAccessibility) {
+            message += "\n\nAttenzione: Projectivy risulta attivo nei servizi di Accessibilità. Per evitare che i due launcher si richiamino a vicenda, disattiva in Projectivy «Sostituisci il launcher corrente».";
+        }
+
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+                .setTitle("Sostituisci il launcher corrente")
+                .setMessage(message)
+                .setNegativeButton("Chiudi", null)
+                .setNeutralButton("Apri Accessibilità", (d, w) -> openAccessibilitySettings());
+
+        if (requested) {
+            b.setPositiveButton("Disattiva", (d, w) -> {
+                prefs.edit().putBoolean("override_launcher", false).apply();
+                Toast.makeText(this, "Sostituzione launcher disattivata", Toast.LENGTH_LONG).show();
+            });
+        } else {
+            b.setPositiveButton("Attiva", (d, w) -> {
+                prefs.edit().putBoolean("override_launcher", true).apply();
+                if (!isFoyhoAccessibilityEnabled()) {
+                    Toast.makeText(this, "Ora abilita «Foyho TV - Sostituisci launcher» in Accessibilità", Toast.LENGTH_LONG).show();
+                    openAccessibilitySettings();
+                } else {
+                    Toast.makeText(this, "Sostituzione launcher attivata", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+        b.show();
+    }
+
+    private void openAccessibilitySettings() {
+        prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 20000L).apply();
+        try {
+            Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivity(i);
+        } catch(Exception e) {
+            safeStart(Settings.ACTION_SETTINGS);
+        }
+    }
+
+    private boolean isFoyhoAccessibilityEnabled() {
+        return isAccessibilityPackageEnabled(getPackageName());
+    }
+
+    private boolean isAccessibilityPackageEnabled(String packageName) {
+        try {
+            String enabled = Settings.Secure.getString(
+                    getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            return enabled != null && enabled.toLowerCase(Locale.ROOT)
+                    .contains(packageName.toLowerCase(Locale.ROOT));
+        } catch(Exception ignored) {
+            return false;
+        }
     }
 
     private void showWeatherCityDialog() {
@@ -809,6 +912,7 @@ public class MainActivity extends Activity {
     }
 
     private void requestDefaultHome() {
+        prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 20000L).apply();
         if (isDefaultHome()) {
             Toast.makeText(this, "Foyho TV è già la Home predefinita", Toast.LENGTH_LONG).show();
             return;
@@ -941,6 +1045,7 @@ public class MainActivity extends Activity {
     }
 
     private void safeStart(String action) {
+        prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 10000L).apply();
         try { startActivity(new Intent(action)); }
         catch(Exception e) { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch(Exception ignored) {} }
     }
