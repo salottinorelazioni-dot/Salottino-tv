@@ -1,0 +1,85 @@
+name: Restore Foyho TV 2.7 UI + Header Icons
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore exact Foyho TV 2.7 MainActivity
+        shell: bash
+        run: |
+          git show 757562d9e3d649bff7e281808b77fd786772a9d0:app/src/main/java/it/salottino/tv/MainActivity.java > app/src/main/java/it/salottino/tv/MainActivity.java
+
+      - name: Add only top-right functional icons
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+          s = s.replace("        header.addView(timeBox);\n\n        Button customize = smallButton(\"Personalizza\");", "        Button customize = smallButton(\"Personalizza\");", 1)
+          old = '        Button customize = smallButton("Personalizza");\n        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(dp(164), dp(50));\n        cbp.setMargins(dp(20), dp(5), dp(10), dp(5));\n        customize.setOnClickListener(v -> showSettings());\n        customize.setOnFocusChangeListener((v, focused) -> {\n            v.animate()\n                    .scaleX(focused ? 1.09f : 1f)\n                    .scaleY(focused ? 1.09f : 1f)\n                    .setDuration(120)\n                    .start();\n            GradientDrawable g = new GradientDrawable();\n            g.setColor(focused ? 0xFF16C95A : 0x7734D96B);\n            g.setCornerRadius(dp(18));\n            g.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0xAA58FF89);\n            v.setBackground(g);\n            if (focused && focusTitle != null) {\n                focusTitle.setText("Personalizza");\n                focusSubtitle.setText("Sfondo, meteo, launcher predefinito e altre opzioni");\n            }\n        });\n        header.addView(customize, cbp);\n'
+          new = '        LinearLayout actions = new LinearLayout(this);\n        actions.setOrientation(LinearLayout.HORIZONTAL);\n        actions.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);\n        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, -2);\n        ap.setMargins(dp(16), dp(3), dp(8), dp(3));\n\n        TextView profile = headerAction("①", "Profilo", "Utenti e profili Android TV");\n        profile.setOnClickListener(v -> safeStart(Settings.ACTION_USER_SETTINGS));\n        actions.addView(profile);\n\n        TextView inputs = headerAction("⇄", "Ingressi", "HDMI, TV e altre sorgenti");\n        inputs.setOnClickListener(v -> safeStart("android.settings.TV_INPUT_SETTINGS"));\n        actions.addView(inputs);\n\n        TextView settings = headerAction("⚙", "Impostazioni Foyho", "Sfondo, meteo, launcher e dimensione tile");\n        settings.setOnClickListener(v -> showSettings());\n        actions.addView(settings);\n\n        TextView account = headerAccountAction();\n        account.setOnClickListener(v -> safeStart(Settings.ACTION_SYNC_SETTINGS));\n        actions.addView(account);\n\n        header.addView(actions, ap);\n        header.addView(timeBox);\n'
+          helper = '\n    private TextView headerAction(String symbol, String title, String subtitle) {\n        TextView v = label(symbol, 24, 0xFFE7FFF0);\n        v.setGravity(Gravity.CENTER);\n        v.setTypeface(Typeface.DEFAULT_BOLD);\n        v.setFocusable(true);\n        v.setClickable(true);\n        v.setMinWidth(dp(52));\n        v.setMinHeight(dp(50));\n        v.setPadding(dp(12), dp(8), dp(12), dp(8));\n\n        GradientDrawable bg = new GradientDrawable();\n        bg.setColor(0x44132A1C);\n        bg.setCornerRadius(dp(18));\n        bg.setStroke(dp(1), 0x7758FF89);\n        v.setBackground(bg);\n\n        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(56), dp(50));\n        lp.setMargins(0, 0, dp(8), 0);\n        v.setLayoutParams(lp);\n\n        v.setOnFocusChangeListener((view, focused) -> {\n            view.animate()\n                    .scaleX(focused ? 1.09f : 1f)\n                    .scaleY(focused ? 1.09f : 1f)\n                    .setDuration(120)\n                    .start();\n\n            GradientDrawable g = new GradientDrawable();\n            g.setColor(focused ? 0xCC16C95A : 0x44132A1C);\n            g.setCornerRadius(dp(18));\n            g.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0x7758FF89);\n            view.setBackground(g);\n\n            if (Build.VERSION.SDK_INT >= 21) {\n                view.setElevation(dp(focused ? 10 : 2));\n            }\n\n            if (focused && focusTitle != null) {\n                focusTitle.setText(title);\n                focusSubtitle.setText(subtitle);\n            }\n        });\n        return v;\n    }\n\n    private TextView headerAccountAction() {\n        TextView v = headerAction("G", "Account Google", "Account collegato e sincronizzazione");\n        v.setTextColor(Color.WHITE);\n        GradientDrawable bg = new GradientDrawable();\n        bg.setColor(0xCC1E5CD6);\n        bg.setCornerRadius(dp(25));\n        bg.setStroke(dp(1), 0xAA8AB4FF);\n        v.setBackground(bg);\n        return v;\n    }\n'
+          if old not in s:
+              raise SystemExit("Blocco Personalizza originale 2.7 non trovato")
+          s = s.replace(old, new, 1)
+          marker = "    private Button smallButton(String text) {\n"
+          if marker not in s:
+              raise SystemExit("Punto helper non trovato")
+          s = s.replace(marker, helper + "\n" + marker, 1)
+          p.write_text(s, encoding="utf-8")
+
+          g = Path("app/build.gradle")
+          gs = g.read_text(encoding="utf-8")
+          gs = re.sub(r"versionCode\s+\d+", "versionCode 13", gs, count=1)
+          gs = re.sub(r"versionName\s+'[^']+'", "versionName '3.3.0'", gs, count=1)
+          g.write_text(gs, encoding="utf-8")
+          print("Restored exact 2.7 UI and patched header only")
+          PY
+
+      - name: Save restored 2.7 UI with header icons
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java app/build.gradle
+          git diff --cached --quiet || git commit -m "Restore 2.7 UI and add header icons"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-3.3-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
