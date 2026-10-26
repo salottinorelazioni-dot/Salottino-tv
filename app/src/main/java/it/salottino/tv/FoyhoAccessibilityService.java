@@ -21,7 +21,7 @@ public class FoyhoAccessibilityService extends AccessibilityService {
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED;
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
-        info.notificationTimeout = 50;
+        info.notificationTimeout = 20;
         setServiceInfo(info);
     }
 
@@ -41,9 +41,10 @@ public class FoyhoAccessibilityService extends AccessibilityService {
     protected boolean onKeyEvent(KeyEvent event) {
         if (!overrideEnabled() || paused()) return false;
 
-        if (event.getKeyCode() == KeyEvent.KEYCODE_HOME &&
-                event.getAction() == KeyEvent.ACTION_UP) {
-            redirectToFoyho();
+        if (event.getKeyCode() == KeyEvent.KEYCODE_HOME) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                redirectToFoyho();
+            }
             return true;
         }
         return false;
