@@ -15,8 +15,6 @@ import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
-import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -27,36 +25,38 @@ import android.widget.Toast;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
 
-    private static final int BG = Color.rgb(10, 12, 18);
-    private static final int BG_2 = Color.rgb(16, 20, 28);
-    private static final int CARD = Color.argb(220, 20, 24, 34);
-    private static final int CARD_ALT = Color.argb(220, 24, 30, 42);
-    private static final int STROKE = Color.argb(110, 92, 126, 168);
+    private static final int BG = Color.rgb(4, 7, 8);
+    private static final int BG_2 = Color.rgb(3, 16, 12);
+    private static final int PANEL = Color.argb(234, 1, 28, 19);
+    private static final int PANEL_2 = Color.argb(205, 8, 20, 19);
+    private static final int CARD = Color.argb(212, 17, 20, 24);
+    private static final int CARD_FOCUS = Color.argb(232, 24, 30, 36);
+    private static final int STROKE = Color.argb(100, 58, 120, 92);
+    private static final int GREEN = Color.rgb(105, 255, 156);
+    private static final int GREEN_SOFT = Color.rgb(72, 192, 122);
     private static final int TEXT = Color.WHITE;
-    private static final int MUTED = Color.rgb(173, 186, 201);
-    private static final int ACCENT = Color.rgb(76, 174, 255);
-    private static final int ACCENT_2 = Color.rgb(59, 223, 180);
-    private static final int GOLD = Color.rgb(255, 199, 87);
+    private static final int MUTED = Color.rgb(180, 198, 188);
 
     private final Handler handler = new Handler();
     private TextView clockView;
     private TextView dateView;
-    private TextView weatherView;
-    private TextView heroTitle;
-    private TextView heroSubtitle;
-    private GridLayout appsGrid;
+    private TextView subtitleView;
+    private LinearLayout continueRow;
+    private LinearLayout mediaRow;
+    private LinearLayout allRow;
 
     private final Runnable clockTick = new Runnable() {
         @Override
         public void run() {
             updateClock();
-            handler.postDelayed(this, 30_000L);
+            handler.postDelayed(this, 30000L);
         }
     };
 
@@ -73,9 +73,7 @@ public class MainActivity extends Activity {
         super.onResume();
         hideSystemUi();
         updateClock();
-        if (appsGrid != null) {
-            populateApps();
-        }
+        populateRows();
     }
 
     @Override
@@ -85,464 +83,321 @@ public class MainActivity extends Activity {
     }
 
     private void buildHome() {
-        FrameLayout root = new FrameLayout(this);
+        ScrollView root = new ScrollView(this);
+        root.setFillViewport(true);
+        root.setOverScrollMode(View.OVER_SCROLL_NEVER);
         root.setBackground(makeBackground());
-
-        LinearLayout shell = new LinearLayout(this);
-        shell.setOrientation(LinearLayout.HORIZONTAL);
-        shell.setPadding(dp(18), dp(18), dp(18), dp(18));
-        root.addView(shell, new FrameLayout.LayoutParams(-1, -1));
-
-        shell.addView(buildSideRail());
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(0, -1, 1f);
-        scrollLp.setMargins(dp(18), 0, 0, 0);
-        shell.addView(scroll, scrollLp);
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(0, 0, dp(6), dp(6));
-        scroll.addView(content, new ViewGroup.LayoutParams(-1, -2));
+        content.setPadding(dp(36), dp(28), dp(36), dp(28));
+        root.addView(content, new ViewGroup.LayoutParams(-1, -2));
 
-        LinearLayout rowTop = new LinearLayout(this);
-        rowTop.setOrientation(LinearLayout.HORIZONTAL);
-        content.addView(rowTop, new LinearLayout.LayoutParams(-1, -2));
+        content.addView(buildTopBar(), new LinearLayout.LayoutParams(-1, -2));
 
-        View hero = buildHeroCard();
-        LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(0, dp(178), 2.2f);
-        heroLp.setMargins(0, 0, dp(16), 0);
-        rowTop.addView(hero, heroLp);
+        LinearLayout quickActions = new LinearLayout(this);
+        quickActions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams qaLp = new LinearLayout.LayoutParams(-2, -2);
+        qaLp.setMargins(0, dp(18), 0, dp(10));
+        content.addView(quickActions, qaLp);
+        quickActions.addView(actionChip("Personalizza", new View.OnClickListener() {
+            @Override public void onClick(View v) { safeStart(Settings.ACTION_SETTINGS); }
+        }));
+        addSpaceHorizontal(quickActions, 10);
+        quickActions.addView(actionChip("Ingressi", new View.OnClickListener() {
+            @Override public void onClick(View v) { safeStart("android.settings.TV_INPUT_SETTINGS"); }
+        }));
+        addSpaceHorizontal(quickActions, 10);
+        quickActions.addView(actionChip("App", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (continueRow != null && continueRow.getChildCount() > 0) continueRow.getChildAt(0).requestFocus();
+            }
+        }));
 
-        View calendar = buildCalendarCard();
-        rowTop.addView(calendar, new LinearLayout.LayoutParams(0, dp(178), 1f));
+        content.addView(sectionTitle("Guarda subito"));
+        continueRow = horizontalRow();
+        content.addView(wrapRow(continueRow));
 
-        LinearLayout rowBottom = new LinearLayout(this);
-        rowBottom.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams rowBottomLp = new LinearLayout.LayoutParams(-1, -2);
-        rowBottomLp.setMargins(0, dp(16), 0, 0);
-        content.addView(rowBottom, rowBottomLp);
+        content.addView(sectionTitle("Streaming & Media"));
+        mediaRow = horizontalRow();
+        content.addView(wrapRow(mediaRow));
 
-        View appsCard = buildAppsCard();
-        LinearLayout.LayoutParams appsLp = new LinearLayout.LayoutParams(0, -2, 2.2f);
-        appsLp.setMargins(0, 0, dp(16), 0);
-        rowBottom.addView(appsCard, appsLp);
-
-        LinearLayout rightColumn = new LinearLayout(this);
-        rightColumn.setOrientation(LinearLayout.VERTICAL);
-        rowBottom.addView(rightColumn, new LinearLayout.LayoutParams(0, -2, 1f));
-
-        View statusCard = buildStatusCard();
-        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(-1, dp(180));
-        rightColumn.addView(statusCard, statusLp);
-
-        View weatherCard = buildWeatherCard();
-        LinearLayout.LayoutParams weatherLp = new LinearLayout.LayoutParams(-1, dp(204));
-        weatherLp.setMargins(0, dp(16), 0, 0);
-        rightColumn.addView(weatherCard, weatherLp);
+        content.addView(sectionTitle("Tutte le app"));
+        allRow = horizontalRow();
+        content.addView(wrapRow(allRow));
 
         setContentView(root);
         updateClock();
-        populateApps();
+        populateRows();
     }
 
-    private View buildSideRail() {
-        LinearLayout rail = new LinearLayout(this);
-        rail.setOrientation(LinearLayout.VERTICAL);
-        rail.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        rail.setPadding(dp(10), dp(12), dp(10), dp(12));
-        rail.setBackground(makeRounded(CARD, 28, STROKE, 1));
-        rail.setLayoutParams(new LinearLayout.LayoutParams(dp(96), -1));
-
-        TextView brand = new TextView(this);
-        brand.setText("FOYHO\\nTV");
-        brand.setTextColor(TEXT);
-        brand.setTextSize(17);
-        brand.setGravity(Gravity.CENTER);
-        brand.setTypeface(Typeface.DEFAULT_BOLD);
-        brand.setPadding(0, dp(6), 0, dp(8));
-        rail.addView(brand, new LinearLayout.LayoutParams(-1, -2));
-
-        rail.addView(railButton("⌂", "Home", true, v -> toast("Home")));
-        rail.addView(railButton("▦", "App", false, v -> requestAppsFocus()));
-        rail.addView(railButton("▶", "Media", false, v -> toast("Area media in arrivo")));
-        rail.addView(railButton("⇄", "Ingressi", false, v -> safeStart("android.settings.TV_INPUT_SETTINGS")));
-        rail.addView(railButton("⚙", "Settings", false, v -> safeStart(Settings.ACTION_SETTINGS)));
-
-        View spacer = new View(this);
-        rail.addView(spacer, new LinearLayout.LayoutParams(-1, 0, 1f));
-
-        TextView foot = new TextView(this);
-        foot.setText("Dashboard\\n3.0");
-        foot.setTextColor(MUTED);
-        foot.setGravity(Gravity.CENTER);
-        foot.setTextSize(12);
-        rail.addView(foot, new LinearLayout.LayoutParams(-1, -2));
-
-        return rail;
-    }
-
-    private View railButton(String symbol, String label, boolean selected, View.OnClickListener click) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER);
-        box.setFocusable(true);
-        box.setClickable(true);
-        box.setPadding(dp(10), dp(10), dp(10), dp(10));
-        box.setBackground(makeRounded(selected ? Color.argb(255, 40, 92, 145) : Color.TRANSPARENT, 20,
-                selected ? ACCENT : Color.TRANSPARENT, selected ? 2 : 0));
-        box.setOnClickListener(click);
-
-        TextView icon = new TextView(this);
-        icon.setText(symbol);
-        icon.setTextColor(TEXT);
-        icon.setTextSize(20);
-        icon.setGravity(Gravity.CENTER);
-        icon.setTypeface(Typeface.DEFAULT_BOLD);
-
-        TextView txt = new TextView(this);
-        txt.setText(label);
-        txt.setTextColor(selected ? TEXT : MUTED);
-        txt.setTextSize(11);
-        txt.setGravity(Gravity.CENTER);
-
-        box.addView(icon);
-        box.addView(txt);
-
-        box.setOnFocusChangeListener((v, hasFocus) -> {
-            v.animate().scaleX(hasFocus ? 1.08f : 1f).scaleY(hasFocus ? 1.08f : 1f).setDuration(130).start();
-            v.setBackground(makeRounded(hasFocus || selected ? Color.argb(255, 40, 92, 145) : Color.TRANSPARENT,
-                    20, hasFocus || selected ? ACCENT : Color.TRANSPARENT, hasFocus || selected ? 2 : 0));
-        });
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, dp(8), 0, 0);
-        box.setLayoutParams(lp);
-        return box;
-    }
-
-    private View buildHeroCard() {
-        LinearLayout card = cardContainer();
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(24), dp(20), dp(24), dp(20));
+    private View buildTopBar() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(24), dp(22), dp(24), dp(22));
+        panel.setBackground(makeRounded(PANEL, 34, Color.argb(110, 34, 124, 82), 1));
+        if (Build.VERSION.SDK_INT >= 21) panel.setElevation(dp(3));
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(top, new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(top, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        top.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout brandWrap = new LinearLayout(this);
+        brandWrap.setOrientation(LinearLayout.HORIZONTAL);
+        brandWrap.setGravity(Gravity.CENTER_VERTICAL);
+        top.addView(brandWrap, new LinearLayout.LayoutParams(0, -2, 1.4f));
 
-        TextView eyebrow = makeText("FOYHO TV", 14, ACCENT_2, true);
-        left.addView(eyebrow);
+        TextView tvIcon = new TextView(this);
+        tvIcon.setText("▣");
+        tvIcon.setTextColor(GREEN);
+        tvIcon.setTextSize(24);
+        tvIcon.setTypeface(Typeface.DEFAULT_BOLD);
+        brandWrap.addView(tvIcon);
 
-        heroTitle = makeText("Home Dashboard", 28, TEXT, true);
-        heroTitle.setPadding(0, dp(6), 0, 0);
-        left.addView(heroTitle);
+        LinearLayout brandTextWrap = new LinearLayout(this);
+        brandTextWrap.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams btwLp = new LinearLayout.LayoutParams(-2, -2);
+        btwLp.setMargins(dp(14), 0, 0, 0);
+        brandWrap.addView(brandTextWrap, btwLp);
 
-        heroSubtitle = makeText("Launcher pulito, rapido e pensato per la TV", 14, MUTED, false);
-        heroSubtitle.setPadding(0, dp(6), 0, 0);
-        left.addView(heroSubtitle);
+        TextView brand = new TextView(this);
+        brand.setText("FOYHO\nTV");
+        brand.setTextColor(GREEN);
+        brand.setTextSize(28);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        brandTextWrap.addView(brand);
 
-        LinearLayout clockBox = new LinearLayout(this);
-        clockBox.setOrientation(LinearLayout.VERTICAL);
-        clockBox.setGravity(Gravity.RIGHT);
-        top.addView(clockBox);
+        LinearLayout right = new LinearLayout(this);
+        right.setOrientation(LinearLayout.HORIZONTAL);
+        right.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        top.addView(right, new LinearLayout.LayoutParams(0, -2, 2.1f));
 
-        clockView = makeText("--:--", 34, TEXT, true);
-        clockBox.addView(clockView);
+        right.addView(headerIconButton("①", "Profilo 1", new View.OnClickListener() {
+            @Override public void onClick(View v) { toast("Profilo 1"); }
+        }));
+        addSpaceHorizontal(right, 12);
+        right.addView(headerIconButton("⇥", "Ingressi", new View.OnClickListener() {
+            @Override public void onClick(View v) { safeStart("android.settings.TV_INPUT_SETTINGS"); }
+        }));
+        addSpaceHorizontal(right, 12);
+        right.addView(headerIconButton("⚙", "Impostazioni", new View.OnClickListener() {
+            @Override public void onClick(View v) { safeStart(Settings.ACTION_SETTINGS); }
+        }));
+        addSpaceHorizontal(right, 12);
+        right.addView(headerAccountButton("G", "Google", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                safeStart("android.settings.ACCOUNT_SYNC_SETTINGS");
+            }
+        }));
+        addSpaceHorizontal(right, 22);
 
-        dateView = makeText("--", 14, MUTED, false);
-        dateView.setGravity(Gravity.RIGHT);
-        clockBox.addView(dateView);
+        LinearLayout clockWrap = new LinearLayout(this);
+        clockWrap.setOrientation(LinearLayout.VERTICAL);
+        clockWrap.setGravity(Gravity.END);
+        right.addView(clockWrap, new LinearLayout.LayoutParams(-2, -2));
 
-        LinearLayout chips = new LinearLayout(this);
-        chips.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams chipsLp = new LinearLayout.LayoutParams(-2, -2);
-        chipsLp.setMargins(0, dp(18), 0, 0);
-        card.addView(chips, chipsLp);
+        clockView = new TextView(this);
+        clockView.setTextColor(TEXT);
+        clockView.setTextSize(34);
+        clockView.setTypeface(Typeface.DEFAULT_BOLD);
+        clockWrap.addView(clockView);
 
-        chips.addView(infoChip("Sistema", "TV Home"));
-        chips.addView(infoChip("Profilo", "Salottino"));
-        weatherView = infoChip("Meteo", "Sereno 22°C");
-        chips.addView(weatherView);
+        dateView = new TextView(this);
+        dateView.setTextColor(MUTED);
+        dateView.setTextSize(18);
+        dateView.setGravity(Gravity.END);
+        clockWrap.addView(dateView);
 
-        return card;
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.argb(70, 130, 220, 170));
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(-1, dp(1));
+        divLp.setMargins(0, dp(22), 0, dp(18));
+        panel.addView(divider, divLp);
+
+        subtitleView = new TextView(this);
+        subtitleView.setText("Home Foyho TV • seleziona un'app per aprirla subito");
+        subtitleView.setTextColor(Color.rgb(150, 173, 159));
+        subtitleView.setTextSize(18);
+        panel.addView(subtitleView);
+
+        return panel;
     }
 
-    private TextView infoChip(String title, String value) {
-        TextView chip = new TextView(this);
-        chip.setText(title + "\\n" + value);
-        chip.setTextColor(TEXT);
-        chip.setTextSize(12);
-        chip.setTypeface(Typeface.DEFAULT_BOLD);
-        chip.setPadding(dp(14), dp(10), dp(14), dp(10));
-        chip.setBackground(makeRounded(Color.argb(160, 33, 41, 58), 18, Color.argb(120, 82, 108, 148), 1));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-        lp.setMargins(0, 0, dp(10), 0);
-        chip.setLayoutParams(lp);
-        return chip;
+    private TextView headerIconButton(String symbol, final String hint, View.OnClickListener onClick) {
+        final TextView t = new TextView(this);
+        t.setText(symbol);
+        t.setTextColor(TEXT);
+        t.setTextSize(24);
+        t.setGravity(Gravity.CENTER);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setFocusable(true);
+        t.setClickable(true);
+        t.setPadding(dp(16), dp(14), dp(16), dp(14));
+        t.setBackground(makeRounded(Color.argb(36, 105, 255, 156), 22, Color.argb(110, 81, 190, 128), 1));
+        t.setOnClickListener(onClick);
+        t.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override public void onFocusChange(View v, boolean hasFocus) {
+                v.animate().scaleX(hasFocus ? 1.08f : 1f).scaleY(hasFocus ? 1.08f : 1f).setDuration(120).start();
+                t.setBackground(makeRounded(hasFocus ? Color.argb(80, 105, 255, 156) : Color.argb(36, 105, 255, 156),
+                        22, hasFocus ? GREEN : Color.argb(110, 81, 190, 128), hasFocus ? 2 : 1));
+                if (hasFocus && subtitleView != null) subtitleView.setText(hint + " • premi OK per aprire");
+            }
+        });
+        return t;
     }
 
-    private View buildCalendarCard() {
-        LinearLayout card = cardContainer();
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+    private View headerAccountButton(String letter, final String hint, View.OnClickListener onClick) {
+        final LinearLayout wrap = new LinearLayout(this);
+        wrap.setGravity(Gravity.CENTER);
+        wrap.setFocusable(true);
+        wrap.setClickable(true);
+        wrap.setPadding(dp(6), dp(6), dp(6), dp(6));
+        wrap.setBackground(makeRounded(Color.argb(24, 255, 255, 255), 26, Color.argb(90, 81, 190, 128), 1));
 
-        card.addView(makeText("Agenda", 18, TEXT, true));
-        TextView sub = makeText("Promemoria rapidi", 12, MUTED, false);
-        sub.setPadding(0, dp(4), 0, dp(14));
-        card.addView(sub);
+        final TextView inner = new TextView(this);
+        inner.setText(letter);
+        inner.setTextColor(TEXT);
+        inner.setTextSize(20);
+        inner.setTypeface(Typeface.DEFAULT_BOLD);
+        inner.setGravity(Gravity.CENTER);
+        inner.setBackground(makeRounded(Color.rgb(45, 125, 255), 20, Color.TRANSPARENT, 0));
+        inner.setPadding(dp(15), dp(10), dp(15), dp(10));
+        wrap.addView(inner, new LinearLayout.LayoutParams(-2, -2));
 
-        card.addView(agendaRow("OGGI", "Controllo launcher", "22:30"));
-        card.addView(agendaRow("DOM", "Backup APK", "10:00"));
-        card.addView(agendaRow("LUN", "Test home button", "18:00"));
-        return card;
+        wrap.setOnClickListener(onClick);
+        wrap.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override public void onFocusChange(View v, boolean hasFocus) {
+                v.animate().scaleX(hasFocus ? 1.08f : 1f).scaleY(hasFocus ? 1.08f : 1f).setDuration(120).start();
+                wrap.setBackground(makeRounded(hasFocus ? Color.argb(60, 105, 255, 156) : Color.argb(24, 255, 255, 255),
+                        26, hasFocus ? GREEN : Color.argb(90, 81, 190, 128), hasFocus ? 2 : 1));
+                if (hasFocus && subtitleView != null) subtitleView.setText(hint + " • account Google collegato");
+            }
+        });
+        return wrap;
     }
 
-    private View agendaRow(String day, String title, String time) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(10), dp(10), dp(10), dp(10));
-        row.setBackground(makeRounded(Color.argb(125, 26, 33, 46), 16, Color.argb(70, 81, 108, 145), 1));
+    private TextView actionChip(String label, View.OnClickListener onClick) {
+        final TextView t = new TextView(this);
+        t.setText(label);
+        t.setTextColor(TEXT);
+        t.setTextSize(15);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setFocusable(true);
+        t.setClickable(true);
+        t.setPadding(dp(18), dp(12), dp(18), dp(12));
+        t.setBackground(makeRounded(PANEL_2, 20, Color.argb(90, 58, 120, 92), 1));
+        t.setOnClickListener(onClick);
+        t.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                v.animate().scaleX(hasFocus ? 1.04f : 1f).scaleY(hasFocus ? 1.04f : 1f).setDuration(120).start();
+                t.setBackground(makeRounded(hasFocus ? Color.argb(220, 18, 58, 38) : PANEL_2, 20,
+                        hasFocus ? GREEN : Color.argb(90, 58, 120, 92), hasFocus ? 2 : 1));
+                if (hasFocus && subtitleView != null) subtitleView.setText(label + " • scorciatoia rapida");
+            }
+        });
+        return t;
+    }
+
+    private TextView sectionTitle(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(TEXT);
+        tv.setTextSize(28);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, 0, 0, dp(8));
-        row.setLayoutParams(lp);
-
-        TextView tag = new TextView(this);
-        tag.setText(day);
-        tag.setTextColor(ACCENT);
-        tag.setTextSize(11);
-        tag.setTypeface(Typeface.DEFAULT_BOLD);
-        row.addView(tag, new LinearLayout.LayoutParams(dp(46), -2));
-
-        LinearLayout txtBox = new LinearLayout(this);
-        txtBox.setOrientation(LinearLayout.VERTICAL);
-        row.addView(txtBox, new LinearLayout.LayoutParams(0, -2, 1f));
-
-        txtBox.addView(makeText(title, 13, TEXT, true));
-        txtBox.addView(makeText("Foyho planner", 11, MUTED, false));
-
-        TextView clock = makeText(time, 12, GOLD, true);
-        row.addView(clock);
-        return row;
+        lp.setMargins(0, dp(18), 0, dp(12));
+        tv.setLayoutParams(lp);
+        return tv;
     }
 
-    private View buildAppsCard() {
-        LinearLayout card = cardContainer();
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(20), dp(18), dp(20), dp(18));
-
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(header, new LinearLayout.LayoutParams(-1, -2));
-
-        LinearLayout titles = new LinearLayout(this);
-        titles.setOrientation(LinearLayout.VERTICAL);
-        header.addView(titles, new LinearLayout.LayoutParams(0, -2, 1f));
-
-        titles.addView(makeText("App", 20, TEXT, true));
-        TextView sub = makeText("Le tue app principali", 12, MUTED, false);
-        sub.setPadding(0, dp(4), 0, 0);
-        titles.addView(sub);
-
-        TextView hint = new TextView(this);
-        hint.setText("OK per aprire");
-        hint.setTextColor(ACCENT_2);
-        hint.setTextSize(12);
-        hint.setTypeface(Typeface.DEFAULT_BOLD);
-        header.addView(hint);
-
+    private HorizontalScrollView wrapRow(LinearLayout row) {
         HorizontalScrollView hsv = new HorizontalScrollView(this);
         hsv.setHorizontalScrollBarEnabled(false);
         hsv.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        LinearLayout.LayoutParams hsvLp = new LinearLayout.LayoutParams(-1, -2);
-        hsvLp.setMargins(0, dp(16), 0, 0);
-        card.addView(hsv, hsvLp);
-
-        appsGrid = new GridLayout(this);
-        appsGrid.setColumnCount(4);
-        appsGrid.setRowCount(4);
-        appsGrid.setUseDefaultMargins(false);
-        hsv.addView(appsGrid, new ViewGroup.LayoutParams(-2, -2));
-
-        return card;
+        hsv.addView(row, new ViewGroup.LayoutParams(-2, -2));
+        return hsv;
     }
 
-    private View buildStatusCard() {
-        LinearLayout card = cardContainer();
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(20), dp(18), dp(20), dp(18));
-
-        card.addView(makeText("Stato", 18, TEXT, true));
-        TextView sub = makeText("Sistema e collegamenti", 12, MUTED, false);
-        sub.setPadding(0, dp(4), 0, dp(14));
-        card.addView(sub);
-
-        card.addView(statusRow("Launcher", "Foyho TV attivo", ACCENT_2));
-        card.addView(statusRow("Rete", "Controllo rapido dalle impostazioni", ACCENT));
-        card.addView(statusRow("Ingresso", "HDMI / TV / App", GOLD));
-        card.addView(statusRow("Focus", "Tile con evidenza luminosa", Color.WHITE));
-        return card;
-    }
-
-    private View statusRow(String label, String value, int color) {
+    private LinearLayout horizontalRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, 0, 0, dp(10));
-        row.setLayoutParams(lp);
-
-        View dot = new View(this);
-        GradientDrawable gd = new GradientDrawable();
-        gd.setColor(color);
-        gd.setShape(GradientDrawable.OVAL);
-        dot.setBackground(gd);
-        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(10), dp(10));
-        dotLp.setMargins(0, 0, dp(10), 0);
-        row.addView(dot, dotLp);
-
-        LinearLayout textBox = new LinearLayout(this);
-        textBox.setOrientation(LinearLayout.VERTICAL);
-        row.addView(textBox);
-        textBox.addView(makeText(label, 13, TEXT, true));
-        textBox.addView(makeText(value, 11, MUTED, false));
         return row;
     }
 
-    private View buildWeatherCard() {
-        LinearLayout card = cardContainer();
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(20), dp(18), dp(20), dp(18));
-
-        card.addView(makeText("Panoramica", 18, TEXT, true));
-        TextView sub = makeText("Widget estetico", 12, MUTED, false);
-        sub.setPadding(0, dp(4), 0, dp(14));
-        card.addView(sub);
-
-        LinearLayout main = new LinearLayout(this);
-        main.setOrientation(LinearLayout.HORIZONTAL);
-        main.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(main, new LinearLayout.LayoutParams(-1, -2));
-
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        main.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
-
-        left.addView(makeText("Sereno", 15, MUTED, false));
-        left.addView(makeText("22°", 40, TEXT, true));
-        left.addView(makeText("Interfaccia pulita e leggibile", 12, MUTED, false));
-
-        TextView icon = new TextView(this);
-        icon.setText("☀");
-        icon.setTextSize(52);
-        icon.setTextColor(GOLD);
-        main.addView(icon);
-
-        LinearLayout footer = new LinearLayout(this);
-        footer.setOrientation(LinearLayout.HORIZONTAL);
-        footer.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(-1, -2);
-        footerLp.setMargins(0, dp(18), 0, 0);
-        card.addView(footer, footerLp);
-
-        footer.addView(miniStat("Sunrise", "06:58"), new LinearLayout.LayoutParams(0, -2, 1f));
-        footer.addView(miniStat("Sunset", "18:12"), new LinearLayout.LayoutParams(0, -2, 1f));
-        return card;
-    }
-
-    private View miniStat(String k, String v) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(12), dp(10), dp(12), dp(10));
-        box.setBackground(makeRounded(Color.argb(120, 26, 33, 46), 16, Color.argb(70, 81, 108, 145), 1));
-        box.addView(makeText(k, 11, MUTED, false));
-        box.addView(makeText(v, 14, TEXT, true));
-        return box;
-    }
-
-    private LinearLayout cardContainer() {
-        LinearLayout c = new LinearLayout(this);
-        c.setBackground(makeRounded(CARD, 28, STROKE, 1));
-        if (Build.VERSION.SDK_INT >= 21) {
-            c.setElevation(dp(3));
+    private void populateRows() {
+        List<ResolveInfo> allApps = loadLaunchableApps();
+        List<ResolveInfo> mediaApps = filterMediaApps(allApps);
+        List<ResolveInfo> continueApps = new ArrayList<ResolveInfo>();
+        for (int i = 0; i < allApps.size() && i < 7; i++) continueApps.add(allApps.get(i));
+        if (mediaApps.isEmpty()) {
+            for (int i = 0; i < allApps.size() && i < 8; i++) mediaApps.add(allApps.get(i));
         }
-        return c;
+
+        fillRow(continueRow, continueApps, 7);
+        fillRow(mediaRow, mediaApps, 10);
+        fillRow(allRow, allApps, 18);
+
+        if (continueRow != null && continueRow.getChildCount() > 0) continueRow.getChildAt(0).requestFocus();
     }
 
-    private void populateApps() {
-        appsGrid.removeAllViews();
-        List<ResolveInfo> apps = loadLaunchableApps();
-        int max = Math.min(12, apps.size());
-        for (int i = 0; i < max; i++) {
-            ResolveInfo ri = apps.get(i);
-            appsGrid.addView(buildAppTile(ri));
-        }
-        if (appsGrid.getChildCount() > 0) {
-            appsGrid.getChildAt(0).requestFocus();
-        }
+    private void fillRow(LinearLayout row, List<ResolveInfo> apps, int limit) {
+        if (row == null) return;
+        row.removeAllViews();
+        int count = Math.min(limit, apps.size());
+        for (int i = 0; i < count; i++) row.addView(buildAppTile(apps.get(i)));
     }
 
-    private View buildAppTile(ResolveInfo ri) {
-        LinearLayout tile = new LinearLayout(this);
+    private View buildAppTile(final ResolveInfo ri) {
+        final PackageManager pm = getPackageManager();
+        final CharSequence labelCs = ri.loadLabel(pm);
+        final Drawable iconDrawable = ri.loadIcon(pm);
+        final String appLabel = String.valueOf(labelCs);
+
+        final LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
-        tile.setGravity(Gravity.CENTER);
+        tile.setGravity(Gravity.CENTER_HORIZONTAL);
         tile.setFocusable(true);
         tile.setClickable(true);
-        tile.setPadding(dp(14), dp(14), dp(14), dp(14));
-        tile.setBackground(makeRounded(CARD_ALT, 22, Color.argb(90, 84, 110, 148), 1));
-
-        GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
-        lp.width = dp(150);
-        lp.height = dp(106);
-        lp.setMargins(0, 0, dp(12), dp(12));
+        tile.setPadding(dp(18), dp(16), dp(18), dp(14));
+        tile.setBackground(makeRounded(CARD, 24, STROKE, 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(220), dp(132));
+        lp.setMargins(0, 0, dp(14), dp(14));
         tile.setLayoutParams(lp);
 
-        Drawable iconDrawable;
-        CharSequence label;
-        try {
-            iconDrawable = ri.loadIcon(getPackageManager());
-            label = ri.loadLabel(getPackageManager());
-        } catch (Exception e) {
-            iconDrawable = null;
-            label = ri.activityInfo.packageName;
-        }
+        LinearLayout iconWrap = new LinearLayout(this);
+        iconWrap.setGravity(Gravity.CENTER);
+        iconWrap.setBackground(makeRounded(Color.argb(40, 255, 255, 255), 18, Color.TRANSPARENT, 0));
+        iconWrap.setPadding(dp(18), dp(12), dp(18), dp(12));
+        tile.addView(iconWrap, new LinearLayout.LayoutParams(-2, -2));
 
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(iconDrawable);
         icon.setAdjustViewBounds(true);
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(42), dp(42));
-        tile.addView(icon, iconLp);
+        iconWrap.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         TextView name = new TextView(this);
-        name.setText(String.valueOf(label));
+        name.setText(appLabel);
         name.setTextColor(TEXT);
-        name.setTextSize(12);
+        name.setTextSize(15);
+        name.setTypeface(Typeface.DEFAULT_BOLD);
         name.setMaxLines(2);
-        name.setGravity(Gravity.CENTER);
-        name.setPadding(0, dp(10), 0, 0);
-        tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
+        name.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(-1, -2);
+        nameLp.setMargins(0, dp(12), 0, 0);
+        tile.addView(name, nameLp);
 
-        final String appLabel = String.valueOf(label);
-
-        tile.setOnClickListener(v -> launchApp(ri));
-        tile.setOnFocusChangeListener((v, hasFocus) -> {
-            v.animate().scaleX(hasFocus ? 1.06f : 1f).scaleY(hasFocus ? 1.06f : 1f).setDuration(140).start();
-            v.setBackground(makeRounded(hasFocus ? Color.argb(255, 38, 60, 92) : CARD_ALT,
-                    22, hasFocus ? ACCENT_2 : Color.argb(90, 84, 110, 148), hasFocus ? 2 : 1));
-            if (Build.VERSION.SDK_INT >= 21) {
-                v.setElevation(hasFocus ? dp(8) : 0f);
-            }
-            if (hasFocus) {
-                heroTitle.setText(appLabel);
-                heroSubtitle.setText("Premi OK per aprire l'app selezionata");
+        tile.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { launchApp(ri); }
+        });
+        tile.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override public void onFocusChange(View v, boolean hasFocus) {
+                v.animate().scaleX(hasFocus ? 1.06f : 1f).scaleY(hasFocus ? 1.06f : 1f).setDuration(120).start();
+                tile.setBackground(makeRounded(hasFocus ? CARD_FOCUS : CARD, 24,
+                        hasFocus ? GREEN : STROKE, hasFocus ? 2 : 1));
+                if (Build.VERSION.SDK_INT >= 21) v.setElevation(hasFocus ? dp(6) : 0f);
+                if (hasFocus && subtitleView != null) subtitleView.setText(appLabel + " • premi OK per aprire l'applicazione");
             }
         });
         return tile;
@@ -558,16 +413,40 @@ public class MainActivity extends Activity {
             fallback.addCategory(Intent.CATEGORY_LAUNCHER);
             apps = pm.queryIntentActivities(fallback, 0);
         }
-        if (apps == null) apps = new ArrayList<>();
-        Collections.sort(apps, (a, b) -> String.valueOf(a.loadLabel(pm)).compareToIgnoreCase(String.valueOf(b.loadLabel(pm))));
+        if (apps == null) apps = new ArrayList<ResolveInfo>();
+        Collections.sort(apps, new Comparator<ResolveInfo>() {
+            @Override public int compare(ResolveInfo a, ResolveInfo b) {
+                String la = String.valueOf(a.loadLabel(pm));
+                String lb = String.valueOf(b.loadLabel(pm));
+                return la.compareToIgnoreCase(lb);
+            }
+        });
         return apps;
+    }
+
+    private List<ResolveInfo> filterMediaApps(List<ResolveInfo> all) {
+        List<ResolveInfo> out = new ArrayList<ResolveInfo>();
+        for (ResolveInfo ri : all) {
+            String pkg = ri.activityInfo != null ? ri.activityInfo.packageName.toLowerCase(Locale.ROOT) : "";
+            if (pkg.contains("kodi") || pkg.contains("netflix") || pkg.contains("youtube") ||
+                    pkg.contains("prime") || pkg.contains("disney") || pkg.contains("plex") ||
+                    pkg.contains("spotify") || pkg.contains("crunchyroll") || pkg.contains("vlc") ||
+                    pkg.contains("rai") || pkg.contains("mediaset") || pkg.contains("mx")) {
+                out.add(ri);
+            }
+        }
+        return out;
     }
 
     private void launchApp(ResolveInfo ri) {
         try {
-            Intent launch = new Intent(Intent.ACTION_MAIN);
-            launch.addCategory(Intent.CATEGORY_LAUNCHER);
-            launch.setClassName(ri.activityInfo.packageName, ri.activityInfo.name);
+            Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(ri.activityInfo.packageName);
+            if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(ri.activityInfo.packageName);
+            if (launch == null) {
+                launch = new Intent(Intent.ACTION_MAIN);
+                launch.addCategory(Intent.CATEGORY_LAUNCHER);
+                launch.setClassName(ri.activityInfo.packageName, ri.activityInfo.name);
+            }
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(launch);
         } catch (Exception e) {
@@ -575,17 +454,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void requestAppsFocus() {
-        if (appsGrid != null && appsGrid.getChildCount() > 0) {
-            appsGrid.getChildAt(0).requestFocus();
-        }
-    }
-
     private void safeStart(String action) {
         try {
             startActivity(new Intent(action));
         } catch (Exception e) {
-            toast("Azione non disponibile su questa TV");
+            toast("Azione non disponibile");
         }
     }
 
@@ -595,18 +468,13 @@ public class MainActivity extends Activity {
 
     private void updateClock() {
         Date now = new Date();
-        clockView.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now));
-        dateView.setText(new SimpleDateFormat("EEE d MMM", Locale.ITALIAN).format(now));
-        if (weatherView != null) {
-            weatherView.setText("Meteo\\nSereno 22°C");
-        }
+        if (clockView != null) clockView.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now));
+        if (dateView != null) dateView.setText(new SimpleDateFormat("EEE d MMM", Locale.ITALIAN).format(now));
     }
 
     private GradientDrawable makeBackground() {
-        GradientDrawable gd = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                new int[]{BG, BG_2, Color.rgb(8, 16, 28)}
-        );
+        GradientDrawable gd = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{BG, BG_2, Color.rgb(2, 10, 10)});
         gd.setCornerRadius(0f);
         return gd;
     }
@@ -615,19 +483,13 @@ public class MainActivity extends Activity {
         GradientDrawable gd = new GradientDrawable();
         gd.setColor(fill);
         gd.setCornerRadius(dp(radiusDp));
-        if (strokeWidthDp > 0) {
-            gd.setStroke(dp(strokeWidthDp), strokeColor);
-        }
+        if (strokeWidthDp > 0) gd.setStroke(dp(strokeWidthDp), strokeColor);
         return gd;
     }
 
-    private TextView makeText(String text, int sizeSp, int color, boolean bold) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextColor(color);
-        tv.setTextSize(sizeSp);
-        if (bold) tv.setTypeface(Typeface.DEFAULT_BOLD);
-        return tv;
+    private void addSpaceHorizontal(LinearLayout parent, int spaceDp) {
+        View v = new View(this);
+        parent.addView(v, new LinearLayout.LayoutParams(dp(spaceDp), 1));
     }
 
     private int dp(int value) {
