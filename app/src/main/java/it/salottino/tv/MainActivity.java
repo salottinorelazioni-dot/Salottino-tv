@@ -711,7 +711,7 @@ public class MainActivity extends Activity {
         GradientDrawable sh = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0x00000000,0xB0000000});
         shade.setBackground(sh);
-        card.addView(sh,new FrameLayout.LayoutParams(-1,-1));
+        card.addView(shade,new FrameLayout.LayoutParams(-1,-1));
 
         TextView tx = label(name,14,Color.WHITE);
         tx.setGravity(Gravity.LEFT|Gravity.BOTTOM);
