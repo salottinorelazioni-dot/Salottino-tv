@@ -16,7 +16,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Salottino TV"
+        android:label="Foyho TV"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
