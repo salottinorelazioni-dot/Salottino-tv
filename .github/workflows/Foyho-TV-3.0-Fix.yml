@@ -1,0 +1,99 @@
+name: Fix Foyho TV 3.0
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fix Foyho TV 3.0 Java build
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+
+          old = """        tile.setOnClickListener(v -> launchApp(ri));
+                  tile.setOnFocusChangeListener((v, hasFocus) -> {
+                      v.animate().scaleX(hasFocus ? 1.06f : 1f).scaleY(hasFocus ? 1.06f : 1f).setDuration(140).start();
+                      v.setBackground(makeRounded(hasFocus ? Color.argb(255, 38, 60, 92) : CARD_ALT,
+                              22, hasFocus ? ACCENT_2 : Color.argb(90, 84, 110, 148), hasFocus ? 2 : 1));
+                      if (Build.VERSION.SDK_INT >= 21) {
+                          v.setElevation(hasFocus ? dp(8) : 0f);
+                      }
+                      if (hasFocus) {
+                          String title = String.valueOf(label);
+                          heroTitle.setText(title);
+                          heroSubtitle.setText("Premi OK per aprire l'app selezionata");
+                      }
+                  });
+          """
+
+          new = """        final String appLabel = String.valueOf(label);
+
+                  tile.setOnClickListener(v -> launchApp(ri));
+                  tile.setOnFocusChangeListener((v, hasFocus) -> {
+                      v.animate().scaleX(hasFocus ? 1.06f : 1f).scaleY(hasFocus ? 1.06f : 1f).setDuration(140).start();
+                      v.setBackground(makeRounded(hasFocus ? Color.argb(255, 38, 60, 92) : CARD_ALT,
+                              22, hasFocus ? ACCENT_2 : Color.argb(90, 84, 110, 148), hasFocus ? 2 : 1));
+                      if (Build.VERSION.SDK_INT >= 21) {
+                          v.setElevation(hasFocus ? dp(8) : 0f);
+                      }
+                      if (hasFocus) {
+                          heroTitle.setText(appLabel);
+                          heroSubtitle.setText("Premi OK per aprire l'app selezionata");
+                      }
+                  });
+          """
+
+          if old not in s:
+              raise SystemExit("Blocco da correggere non trovato")
+
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Fix Foyho TV 3.0 applicato")
+          PY
+
+      - name: Save Foyho TV 3.0 fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java
+          git diff --cached --quiet || git commit -m "Fix Foyho TV 3.0 build"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-3.0-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
