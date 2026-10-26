@@ -1,0 +1,128 @@
+name: Upgrade Foyho TV 2.6
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore reliable 2.4 behavior and add strong focus
+        shell: bash
+        run: |
+          git checkout 85f6823ea4f061afd3d9ff1dd2ee507775b400a9 -- \
+            app/src/main/java/it/salottino/tv/MainActivity.java \
+            app/src/main/java/it/salottino/tv/FoyhoAccessibilityService.java
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+
+          old = '''    private void focusBehavior(View view, String title, String subtitle) {
+                  view.setOnFocusChangeListener((v, focused) -> {
+                      v.animate().scaleX(focused ? 1.07f : 1f).scaleY(focused ? 1.07f : 1f).setDuration(120).start();
+                      v.setBackground(cardBorder(focused));
+                      if (focused && focusTitle != null) {
+                          focusTitle.setText(title);
+                          focusSubtitle.setText(subtitle);
+                      }
+                  });
+              }
+          '''
+
+          new = '''    private void focusBehavior(View view, String title, String subtitle) {
+                  view.setOnFocusChangeListener((v, focused) -> {
+                      v.animate()
+                              .scaleX(focused ? 1.09f : 1f)
+                              .scaleY(focused ? 1.09f : 1f)
+                              .setDuration(120)
+                              .start();
+
+                      if (Build.VERSION.SDK_INT >= 21) {
+                          v.setElevation(dp(focused ? 14 : 5));
+                      }
+
+                      if (Build.VERSION.SDK_INT >= 23 && v instanceof FrameLayout) {
+                          ((FrameLayout) v).setForeground(focusRing(focused));
+                      } else {
+                          v.setBackground(cardBorder(focused));
+                      }
+
+                      if (focused && focusTitle != null) {
+                          focusTitle.setText(title);
+                          focusSubtitle.setText(subtitle);
+                      }
+                  });
+              }
+
+              private GradientDrawable focusRing(boolean focused) {
+                  GradientDrawable g = new GradientDrawable();
+                  g.setColor(Color.TRANSPARENT);
+                  g.setCornerRadius(dp(18));
+                  g.setStroke(
+                          dp(focused ? 4 : 1),
+                          focused ? 0xFF39FF75 : 0x004C6657
+                  );
+                  return g;
+              }
+          '''
+
+          if old not in s:
+              raise SystemExit("Blocco focusBehavior non trovato nella base 2.4")
+          s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding="utf-8")
+
+          gpath = Path("app/build.gradle")
+          g = gpath.read_text(encoding="utf-8")
+          g = re.sub(r"versionCode\s+\d+", "versionCode 7", g, count=1)
+          g = re.sub(r"versionName\s+'[^']+'", "versionName '2.6.0'", g, count=1)
+          gpath.write_text(g, encoding="utf-8")
+          PY
+
+      - name: Save Foyho TV 2.6 source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java \
+                  app/src/main/java/it/salottino/tv/FoyhoAccessibilityService.java \
+                  app/build.gradle
+          git diff --cached --quiet || git commit -m "Upgrade to Foyho TV 2.6"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.6-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
