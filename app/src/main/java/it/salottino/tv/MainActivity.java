@@ -1211,7 +1211,7 @@ public class MainActivity extends Activity {
                 .apply();
 
         try {
-            Intent i = new Intent(Settings.ACTION_NOTIFICATION_SETTINGS);
+            Intent i = new Intent("android.settings.NOTIFICATION_SETTINGS");
             startActivity(i);
         } catch(Exception e) {
             safeStart(Settings.ACTION_SETTINGS);
