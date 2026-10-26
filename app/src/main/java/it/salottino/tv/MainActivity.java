@@ -1,7 +1,6 @@
 package it.salottino.tv;
 
 import android.app.*;
-import android.animation.*;
 import android.app.role.RoleManager;
 import android.os.*;
 import android.provider.Settings;
@@ -13,7 +12,6 @@ import android.graphics.drawable.*;
 import android.media.tv.TvContract;
 import android.net.Uri;
 import android.view.*;
-import android.view.animation.LinearInterpolator;
 import android.widget.*;
 import java.io.*;
 import java.net.*;
@@ -30,11 +28,6 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private LinearLayout content;
     private TextView clock, date, weather, focusTitle, focusSubtitle;
-    private ImageView dynamicBackdrop;
-    private VideoView dynamicVideo;
-    private ObjectAnimator backdropAnimator;
-    private long backdropRequestId = 0L;
-    private final Map<String, Bitmap> backdropCache = new HashMap<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<AppItem> apps = new ArrayList<>();
 
@@ -81,20 +74,6 @@ public class MainActivity extends Activity {
     private void buildHome() {
         root = new FrameLayout(this);
         applyBackground();
-
-        dynamicBackdrop = new ImageView(this);
-        dynamicBackdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        dynamicBackdrop.setAlpha(0f);
-        root.addView(dynamicBackdrop, new FrameLayout.LayoutParams(-1, -1));
-
-        dynamicVideo = new VideoView(this);
-        dynamicVideo.setVisibility(View.GONE);
-        dynamicVideo.setAlpha(0f);
-        root.addView(dynamicVideo, new FrameLayout.LayoutParams(-1, -1));
-
-        View dynamicShade = new View(this);
-        dynamicShade.setBackgroundColor(0x52000000);
-        root.addView(dynamicShade, new FrameLayout.LayoutParams(-1, -1));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -196,7 +175,6 @@ public class MainActivity extends Activity {
             if (focused && focusTitle != null) {
                 focusTitle.setText("Personalizza");
                 focusSubtitle.setText("Sfondo, meteo, launcher predefinito e altre opzioni");
-                showDefaultBackdrop();
             }
         });
         header.addView(customize, cbp);
@@ -344,7 +322,7 @@ public class MainActivity extends Activity {
             return true;
         });
 
-        focusBehaviorApp(card, item);
+        focusBehavior(card, customLabel(item), categoryDisplay(item.category) + " • tieni premuto per le opzioni");
         return card;
     }
 
@@ -409,8 +387,22 @@ public class MainActivity extends Activity {
 
     private void focusBehavior(View view, String title, String subtitle) {
         view.setOnFocusChangeListener((v, focused) -> {
-            v.animate().scaleX(focused ? 1.07f : 1f).scaleY(focused ? 1.07f : 1f).setDuration(120).start();
-            v.setBackground(cardBorder(focused));
+            v.animate()
+                    .scaleX(focused ? 1.09f : 1f)
+                    .scaleY(focused ? 1.09f : 1f)
+                    .setDuration(120)
+                    .start();
+
+            if (Build.VERSION.SDK_INT >= 21) {
+                v.setElevation(dp(focused ? 14 : 5));
+            }
+
+            if (Build.VERSION.SDK_INT >= 23 && v instanceof FrameLayout) {
+                ((FrameLayout) v).setForeground(focusRing(focused));
+            } else {
+                v.setBackground(cardBorder(focused));
+            }
+
             if (focused && focusTitle != null) {
                 focusTitle.setText(title);
                 focusSubtitle.setText(subtitle);
@@ -418,214 +410,15 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void focusBehaviorApp(View view, AppItem item) {
-        view.setOnFocusChangeListener((v, focused) -> {
-            v.animate().scaleX(focused ? 1.07f : 1f).scaleY(focused ? 1.07f : 1f).setDuration(120).start();
-            v.setBackground(cardBorder(focused));
-            if (focused) {
-                if (focusTitle != null) {
-                    focusTitle.setText(customLabel(item));
-                    focusSubtitle.setText(categoryDisplay(item.category) + " • tieni premuto per le opzioni");
-                }
-                showAppBackdrop(item);
-            }
-        });
-    }
-
-    private void showDefaultBackdrop() {
-        backdropRequestId++;
-        stopDynamicVideo();
-        stopBackdropAnimator();
-        if (dynamicBackdrop != null) {
-            dynamicBackdrop.animate().alpha(0f).setDuration(220).start();
-        }
-    }
-
-    private void showAppBackdrop(AppItem item) {
-        if (dynamicBackdrop == null || item == null) return;
-
-        final long request = ++backdropRequestId;
-        stopDynamicVideo();
-        stopBackdropAnimator();
-
-        Bitmap cached = backdropCache.get(item.pkg);
-        if (cached != null) {
-            dynamicBackdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            dynamicBackdrop.setImageBitmap(cached);
-            dynamicBackdrop.setAlpha(.68f);
-            startBackdropMotion();
-        } else if (item.banner != null) {
-            dynamicBackdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            dynamicBackdrop.setImageDrawable(item.banner);
-            dynamicBackdrop.setAlpha(0f);
-            dynamicBackdrop.animate().alpha(.52f).setDuration(260).start();
-            startBackdropMotion();
-        } else if (item.icon != null) {
-            dynamicBackdrop.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-            dynamicBackdrop.setImageDrawable(item.icon);
-            dynamicBackdrop.setAlpha(0f);
-            dynamicBackdrop.animate().alpha(.28f).setDuration(220).start();
-        }
-
-        new Thread(() -> {
-            BackdropContent content = findBackdropContent(item.pkg);
-            if (request != backdropRequestId || content == null) return;
-
-            if (content.imageUri != null) {
-                Bitmap bm = loadBackdropBitmap(content.imageUri);
-                if (bm != null && request == backdropRequestId) {
-                    backdropCache.put(item.pkg, bm);
-                    runOnUiThread(() -> {
-                        if (request != backdropRequestId || dynamicBackdrop == null) return;
-                        dynamicBackdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                        dynamicBackdrop.setImageBitmap(bm);
-                        dynamicBackdrop.setAlpha(0f);
-                        dynamicBackdrop.animate().alpha(.68f).setDuration(380).start();
-                        startBackdropMotion();
-                    });
-                }
-            }
-
-            if (content.videoUri != null && isDirectVideoUri(content.videoUri)) {
-                runOnUiThread(() -> {
-                    if (request == backdropRequestId) tryPlayPreviewVideo(content.videoUri, request);
-                });
-            }
-        }).start();
-    }
-
-    static class BackdropContent {
-        String imageUri;
-        String videoUri;
-    }
-
-    private BackdropContent findBackdropContent(String pkg) {
-        if (Build.VERSION.SDK_INT < 26 || pkg == null) return null;
-        Cursor c = null;
-        try {
-            String[] projection = {
-                    TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI,
-                    TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI,
-                    TvContract.PreviewPrograms.COLUMN_PREVIEW_VIDEO_URI,
-                    TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME
-            };
-            c = getContentResolver().query(
-                    TvContract.PreviewPrograms.CONTENT_URI,
-                    projection,
-                    TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME + "=?",
-                    new String[]{pkg},
-                    null);
-            if (c != null && c.moveToFirst()) {
-                int thumb = c.getColumnIndex(TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI);
-                int poster = c.getColumnIndex(TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI);
-                int video = c.getColumnIndex(TvContract.PreviewPrograms.COLUMN_PREVIEW_VIDEO_URI);
-                BackdropContent out = new BackdropContent();
-                String thumbnail = thumb >= 0 ? c.getString(thumb) : null;
-                String posterArt = poster >= 0 ? c.getString(poster) : null;
-                out.imageUri = thumbnail != null && !thumbnail.isEmpty() ? thumbnail : posterArt;
-                out.videoUri = video >= 0 ? c.getString(video) : null;
-                return out;
-            }
-        } catch(Throwable ignored) {
-        } finally {
-            if (c != null) c.close();
-        }
-        return null;
-    }
-
-    private Bitmap loadBackdropBitmap(String value) {
-        if (value == null || value.isEmpty()) return null;
-        InputStream in = null;
-        HttpURLConnection con = null;
-        try {
-            Uri uri = Uri.parse(value);
-            String scheme = uri.getScheme();
-            if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
-                con = (HttpURLConnection) new URL(value).openConnection();
-                con.setConnectTimeout(5000);
-                con.setReadTimeout(7000);
-                con.setRequestProperty("User-Agent", "FoyhoTV/2.5");
-                in = con.getInputStream();
-            } else {
-                in = getContentResolver().openInputStream(uri);
-            }
-            if (in == null) return null;
-            return BitmapFactory.decodeStream(in);
-        } catch(Throwable ignored) {
-            return null;
-        } finally {
-            try { if (in != null) in.close(); } catch(Exception ignored) {}
-            if (con != null) con.disconnect();
-        }
-    }
-
-    private boolean isDirectVideoUri(String value) {
-        if (value == null) return false;
-        try {
-            String scheme = Uri.parse(value).getScheme();
-            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
-        } catch(Exception e) {
-            return false;
-        }
-    }
-
-    private void tryPlayPreviewVideo(String uriValue, long request) {
-        if (dynamicVideo == null || uriValue == null) return;
-        try {
-            dynamicVideo.stopPlayback();
-            dynamicVideo.setVideoURI(Uri.parse(uriValue));
-            dynamicVideo.setOnPreparedListener(mp -> {
-                if (request != backdropRequestId) {
-                    try { mp.stop(); } catch(Exception ignored) {}
-                    return;
-                }
-                mp.setVolume(0f, 0f);
-                mp.setLooping(true);
-                dynamicVideo.setVisibility(View.VISIBLE);
-                dynamicVideo.setAlpha(0f);
-                dynamicVideo.start();
-                dynamicVideo.animate().alpha(.58f).setDuration(450).start();
-                if (dynamicBackdrop != null) dynamicBackdrop.animate().alpha(.20f).setDuration(450).start();
-            });
-            dynamicVideo.setOnErrorListener((mp, what, extra) -> {
-                stopDynamicVideo();
-                return true;
-            });
-        } catch(Throwable ignored) {
-            stopDynamicVideo();
-        }
-    }
-
-    private void stopDynamicVideo() {
-        if (dynamicVideo == null) return;
-        try { dynamicVideo.stopPlayback(); } catch(Throwable ignored) {}
-        dynamicVideo.setAlpha(0f);
-        dynamicVideo.setVisibility(View.GONE);
-    }
-
-    private void startBackdropMotion() {
-        if (dynamicBackdrop == null) return;
-        stopBackdropAnimator();
-        dynamicBackdrop.setScaleX(1.02f);
-        dynamicBackdrop.setScaleY(1.02f);
-        dynamicBackdrop.setTranslationX(0f);
-
-        PropertyValuesHolder sx = PropertyValuesHolder.ofFloat(View.SCALE_X, 1.02f, 1.11f);
-        PropertyValuesHolder sy = PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.02f, 1.11f);
-        PropertyValuesHolder tx = PropertyValuesHolder.ofFloat(View.TRANSLATION_X, 0f, -dp(20));
-        backdropAnimator = ObjectAnimator.ofPropertyValuesHolder(dynamicBackdrop, sx, sy, tx);
-        backdropAnimator.setDuration(12000);
-        backdropAnimator.setInterpolator(new LinearInterpolator());
-        backdropAnimator.setRepeatCount(ValueAnimator.INFINITE);
-        backdropAnimator.setRepeatMode(ValueAnimator.REVERSE);
-        backdropAnimator.start();
-    }
-
-    private void stopBackdropAnimator() {
-        if (backdropAnimator != null) {
-            backdropAnimator.cancel();
-            backdropAnimator = null;
-        }
+    private GradientDrawable focusRing(boolean focused) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(Color.TRANSPARENT);
+        g.setCornerRadius(dp(18));
+        g.setStroke(
+                dp(focused ? 4 : 1),
+                focused ? 0xFF39FF75 : 0x004C6657
+        );
+        return g;
     }
 
     private Drawable appFallbackGradient(String seed) {
@@ -1072,7 +865,7 @@ public class MainActivity extends Activity {
                 con = (HttpURLConnection) new URL(target).openConnection();
                 con.setConnectTimeout(6000);
                 con.setReadTimeout(6000);
-                con.setRequestProperty("User-Agent", "FoyhoTV/2.5");
+                con.setRequestProperty("User-Agent", "FoyhoTV/2.3");
                 con.setRequestProperty("Accept", "application/json");
 
                 StringBuilder out = new StringBuilder();
@@ -1265,17 +1058,7 @@ public class MainActivity extends Activity {
         card.addView(tx,new FrameLayout.LayoutParams(-1,-1));
 
         card.setOnClickListener(click);
-        card.setOnFocusChangeListener((v, focused) -> {
-            v.animate().scaleX(focused ? 1.07f : 1f).scaleY(focused ? 1.07f : 1f).setDuration(120).start();
-            v.setBackground(cardBorder(focused));
-            if (focused) {
-                if (focusTitle != null) {
-                    focusTitle.setText(name);
-                    focusSubtitle.setText("TV & Sistema");
-                }
-                showDefaultBackdrop();
-            }
-        });
+        focusBehavior(card,name,"TV & Sistema");
         return card;
     }
 
