@@ -162,7 +162,7 @@ public class MainActivity extends Activity {
         ap.setMargins(dp(16), dp(3), dp(8), dp(3));
 
         TextView profile = headerAction("①", "Profilo", "Utenti e profili Android TV");
-        profile.setOnClickListener(v -> safeStart(Settings.ACTION_USER_SETTINGS));
+        profile.setOnClickListener(v -> safeStart("android.settings.USER_SETTINGS"));
         actions.addView(profile);
 
         TextView inputs = headerAction("⇄", "Ingressi", "HDMI, TV e altre sorgenti");
