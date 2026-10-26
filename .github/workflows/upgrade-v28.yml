@@ -1,0 +1,330 @@
+name: Upgrade Foyho TV 2.8
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply top-right status icons and graphic refinements
+        shell: bash
+        run: |
+          python3 - <<'PY'
+
+          from pathlib import Path
+          import re
+
+          p = Path("app/src/main/java/it/salottino/tv/MainActivity.java")
+          s = p.read_text(encoding="utf-8")
+
+          def add_import(anchor, new_line):
+              global s
+              if new_line not in s:
+                  s = s.replace(anchor, anchor + new_line, 1)
+
+          add_import("import android.net.*;\n", "import android.net.ConnectivityManager;\nimport android.net.Network;\nimport android.net.NetworkCapabilities;\n")
+          add_import("import java.io.*;\n", "import java.io.*;\nimport java.util.Random;\n")
+
+          # Fields
+          old_fields = """    private TextView clock, date, weather, focusTitle, focusSubtitle;
+          """
+          new_fields = """    private TextView clock, date, weather, focusTitle, focusSubtitle;
+              private TextView inputsIcon, networkIcon, notificationsIcon, matrixOverlay;
+              private final Random matrixRandom = new Random();
+              private Runnable matrixRunnable;
+          """
+          if old_fields in s and "matrixOverlay" not in s:
+              s = s.replace(old_fields, new_fields, 1)
+
+          # create / resume hooks
+          s = s.replace(
+              "        buildHome();\n        updateClock();\n        updateWeather();\n    }\n",
+              "        buildHome();\n        updateClock();\n        updateWeather();\n        updateStatusIcons();\n        startMatrixRain();\n    }\n",
+              1
+          )
+          s = s.replace(
+              "            buildHome();\n            updateClock();\n            updateWeather();\n        }\n",
+              "            buildHome();\n            updateClock();\n            updateWeather();\n            updateStatusIcons();\n            startMatrixRain();\n        }\n",
+              1
+          )
+
+          if "@Override protected void onDestroy()" not in s:
+              marker = "    private void buildHome() {\n"
+              insert = """    @Override protected void onDestroy() {
+                  super.onDestroy();
+                  if (handler != null && matrixRunnable != null) {
+                      handler.removeCallbacks(matrixRunnable);
+                  }
+              }
+
+          """
+              s = s.replace(marker, insert + marker, 1)
+
+          # Add matrix overlay after background
+          if "matrixOverlay = new TextView(this);" not in s:
+              s = s.replace(
+                  "        root = new FrameLayout(this);\n        applyBackground();\n",
+                  """        root = new FrameLayout(this);
+                  applyBackground();
+
+                  matrixOverlay = new TextView(this);
+                  matrixOverlay.setTextColor(0x3314FF5A);
+                  matrixOverlay.setTypeface(Typeface.MONOSPACE);
+                  matrixOverlay.setTextSize(11);
+                  matrixOverlay.setLineSpacing(0f, 0.86f);
+                  matrixOverlay.setAlpha(0.22f);
+                  matrixOverlay.setPadding(dp(22), dp(22), dp(22), dp(22));
+                  matrixOverlay.setFocusable(false);
+                  matrixOverlay.setClickable(false);
+                  root.addView(matrixOverlay, new FrameLayout.LayoutParams(-1, -1));
+          """,
+                  1
+              )
+
+          # Replace top header time block with icons + compact info
+          old_header = """        LinearLayout timeBox = new LinearLayout(this);
+                  timeBox.setOrientation(LinearLayout.VERTICAL);
+                  timeBox.setGravity(Gravity.RIGHT);
+
+                  LinearLayout topInfo = new LinearLayout(this);
+                  topInfo.setOrientation(LinearLayout.HORIZONTAL);
+                  topInfo.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+
+                  weather = label("☁ --°C", 15, 0xFF8EFFB0);
+                  weather.setSingleLine(true);
+                  LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
+                  wp.setMargins(0, 0, dp(18), 0);
+                  topInfo.addView(weather, wp);
+
+                  clock = label("", 28, Color.WHITE);
+                  clock.setTypeface(null, Typeface.BOLD);
+                  topInfo.addView(clock);
+
+                  date = label("", 13, 0xFFB7C0CB);
+                  date.setGravity(Gravity.RIGHT);
+
+                  timeBox.addView(topInfo);
+                  timeBox.addView(date);
+                  header.addView(timeBox);
+          """
+          new_header = """        LinearLayout timeBox = new LinearLayout(this);
+                  timeBox.setOrientation(LinearLayout.VERTICAL);
+                  timeBox.setGravity(Gravity.RIGHT);
+
+                  LinearLayout topInfo = new LinearLayout(this);
+                  topInfo.setOrientation(LinearLayout.HORIZONTAL);
+                  topInfo.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+
+                  LinearLayout iconBox = new LinearLayout(this);
+                  iconBox.setOrientation(LinearLayout.HORIZONTAL);
+                  iconBox.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+
+                  inputsIcon = topStatusIcon("⇄", "Ingressi");
+                  inputsIcon.setOnClickListener(v -> safeStart("android.settings.TV_INPUT_SETTINGS"));
+                  iconBox.addView(inputsIcon);
+
+                  networkIcon = topStatusIcon("⌁", "Rete");
+                  networkIcon.setOnClickListener(v -> safeStart(Settings.ACTION_WIFI_SETTINGS));
+                  iconBox.addView(networkIcon);
+
+                  notificationsIcon = topStatusIcon("🔔", "Notifiche");
+                  notificationsIcon.setOnClickListener(v -> openNotificationsPanel());
+                  iconBox.addView(notificationsIcon);
+
+                  LinearLayout.LayoutParams ibp = new LinearLayout.LayoutParams(-2, -2);
+                  ibp.setMargins(0, 0, dp(16), 0);
+                  topInfo.addView(iconBox, ibp);
+
+                  weather = label("☁ --°C", 14, 0xFF8EFFB0);
+                  weather.setSingleLine(true);
+                  LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
+                  wp.setMargins(0, 0, dp(16), 0);
+                  topInfo.addView(weather, wp);
+
+                  clock = label("", 26, Color.WHITE);
+                  clock.setTypeface(null, Typeface.BOLD);
+                  topInfo.addView(clock);
+
+                  date = label("", 12, 0xFFB7C0CB);
+                  date.setGravity(Gravity.RIGHT);
+
+                  timeBox.addView(topInfo);
+                  timeBox.addView(date);
+                  header.addView(timeBox);
+          """
+          if old_header in s:
+              s = s.replace(old_header, new_header, 1)
+
+          # Better focus ring glow
+          s = s.replace(
+              """                  return g;
+                        }
+          """,
+              """                  return g;
+                        }
+
+                        private TextView topStatusIcon(String symbol, String title) {
+                            TextView t = new TextView(this);
+                            t.setText(symbol);
+                            t.setTextSize(17);
+                            t.setTypeface(Typeface.DEFAULT_BOLD);
+                            t.setTextColor(Color.WHITE);
+                            t.setGravity(Gravity.CENTER);
+                            GradientDrawable bg = new GradientDrawable();
+                            bg.setColor(0x4420C45C);
+                            bg.setCornerRadius(dp(12));
+                            bg.setStroke(dp(1), 0x7758FF89);
+                            t.setBackground(bg);
+                            t.setPadding(dp(10), dp(6), dp(10), dp(6));
+                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+                            lp.setMargins(0, 0, dp(8), 0);
+                            t.setLayoutParams(lp);
+                            t.setOnFocusChangeListener((v, focused) -> {
+                                v.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f).setDuration(120).start();
+                                GradientDrawable g2 = new GradientDrawable();
+                                g2.setColor(focused ? 0xAA20C45C : 0x4420C45C);
+                                g2.setCornerRadius(dp(12));
+                                g2.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0x7758FF89);
+                                v.setBackground(g2);
+                                if (focused && focusTitle != null) {
+                                    focusTitle.setText(title);
+                                    focusSubtitle.setText("Scorciatoia barra superiore");
+                                }
+                            });
+                            return t;
+                        }
+
+                        private void updateStatusIcons() {
+                            if (networkIcon != null) {
+                                int state = getNetworkState();
+                                if (state == 2) networkIcon.setText("LAN");
+                                else if (state == 1) networkIcon.setText("Wi‑Fi");
+                                else networkIcon.setText("Offline");
+                            }
+                            if (notificationsIcon != null) {
+                                notificationsIcon.setText("🔔");
+                            }
+                            if (inputsIcon != null) {
+                                inputsIcon.setText("⇄");
+                            }
+                        }
+
+                        private int getNetworkState() {
+                            try {
+                                ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                                if (cm == null) return 0;
+                                Network n = cm.getActiveNetwork();
+                                if (n == null) return 0;
+                                NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+                                if (caps == null) return 0;
+                                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return 2;
+                                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return 1;
+                                return 1;
+                            } catch(Exception e) {
+                                return 0;
+                            }
+                        }
+
+                        private void openNotificationsPanel() {
+                            prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 10000L).apply();
+                            try {
+                                safeStart("android.settings.NOTIFICATION_SETTINGS");
+                            } catch(Exception e) {
+                                safeStart(Settings.ACTION_SETTINGS);
+                            }
+                        }
+
+                        private void startMatrixRain() {
+                            if (matrixOverlay == null) return;
+                            if (matrixRunnable != null) handler.removeCallbacks(matrixRunnable);
+
+                            matrixRunnable = new Runnable() {
+                                @Override public void run() {
+                                    if (matrixOverlay != null) {
+                                        matrixOverlay.setText(buildMatrixText());
+                                        float shift = -dp(matrixRandom.nextInt(18));
+                                        matrixOverlay.animate().translationY(shift).setDuration(1400).start();
+                                        matrixOverlay.animate().alpha(0.18f + (matrixRandom.nextFloat() * 0.10f)).setDuration(1400).start();
+                                    }
+                                    handler.postDelayed(this, 1400);
+                                }
+                            };
+                            handler.post(matrixRunnable);
+                        }
+
+                        private String buildMatrixText() {
+                            String chars = "01アイウエオカキクケコサシスセソABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                            StringBuilder out = new StringBuilder();
+                            int rows = 20;
+                            int cols = 38;
+                            for (int r = 0; r < rows; r++) {
+                                for (int c = 0; c < cols; c++) {
+                                    if (matrixRandom.nextInt(8) == 0) {
+                                        out.append(chars.charAt(matrixRandom.nextInt(chars.length())));
+                                    } else {
+                                        out.append(' ');
+                                    }
+                                }
+                                if (r < rows - 1) out.append("\\n");
+                            }
+                            return out.toString();
+                        }
+          """,
+              1
+          )
+
+          # Slightly more visible focus ring
+          s = s.replace(
+              "                          focused ? 0xFF39FF75 : 0x004C6657",
+              "                          focused ? 0xFF39FF75 : 0x224C6657"
+          )
+
+          p.write_text(s, encoding="utf-8")
+
+          gpath = Path("app/build.gradle")
+          g = gpath.read_text(encoding="utf-8")
+          g = re.sub(r"versionCode\\s+\\d+", "versionCode 9", g, count=1)
+          g = re.sub(r"versionName\\s+'[^']+'", "versionName '2.8.0'", g, count=1)
+          gpath.write_text(g, encoding="utf-8")
+          PY
+
+      - name: Save Foyho TV 2.8 source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java app/build.gradle
+          git diff --cached --quiet || git commit -m "Upgrade to Foyho TV 2.8"
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-2.8-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
