@@ -163,12 +163,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, -2);
         ap.setMargins(dp(16), dp(3), dp(8), dp(3));
 
-        TextView search = headerAction("⌕", "Cerca app", "Cerca rapidamente tra tutte le app installate");
-        search.setOnClickListener(v -> showAppSearch());
-        actions.addView(search);
-
-        TextView settings = headerAction("⚙", "Centro di controllo", "Wi-Fi, Bluetooth, ingressi, audio, backup e impostazioni");
-        settings.setOnClickListener(v -> showControlCenter());
+        TextView settings = headerAction("⚙", "Impostazioni Foyho", "Personalizzazione, backup e ripristino");
+        settings.setOnClickListener(v -> showSettings());
         actions.addView(settings);
 
         header.addView(actions, ap);
@@ -605,6 +601,7 @@ public class MainActivity extends Activity {
         for (ResolveInfo r : found.values()) {
             String pkg = r.activityInfo.packageName;
             if (pkg.equals(getPackageName()) || hidden.contains(pkg)) continue;
+            if (!isUserFacingLauncherEntry(r, pm)) continue;
 
             Drawable icon = r.loadIcon(pm);
             Drawable banner = null;
@@ -630,6 +627,53 @@ public class MainActivity extends Activity {
         boolean changed = false;
         for (AppItem a : apps) if (!order.contains(a.pkg)) { order.add(a.pkg); changed = true; }
         if (changed) saveOrder(order);
+    }
+
+    private boolean isUserFacingLauncherEntry(ResolveInfo r, PackageManager pm) {
+        if (r == null || r.activityInfo == null || r.activityInfo.applicationInfo == null) return false;
+        if (!r.activityInfo.enabled || !r.activityInfo.applicationInfo.enabled) return false;
+        if (!r.activityInfo.exported) return false;
+
+        String pkg = r.activityInfo.packageName == null ? "" : r.activityInfo.packageName.toLowerCase(Locale.ROOT);
+        String activity = r.activityInfo.name == null ? "" : r.activityInfo.name.toLowerCase(Locale.ROOT);
+        String label;
+        try { label = String.valueOf(r.loadLabel(pm)).trim().toLowerCase(Locale.ROOT); }
+        catch(Exception e) { label = ""; }
+
+        // Componenti Philips/Android che possono dichiararsi launcher ma non sono vere app per l'utente.
+        if (pkg.startsWith("org.droidtv.devicesetup") ||
+                pkg.startsWith("org.droidtv.settings") ||
+                pkg.equals("com.android.settings") ||
+                pkg.startsWith("com.android.tv.settings") ||
+                pkg.contains("setupwizard") ||
+                pkg.contains("setupwraith") ||
+                pkg.contains("provision")) {
+            return false;
+        }
+
+        int flags = r.activityInfo.applicationInfo.flags;
+        boolean system = (flags & ApplicationInfo.FLAG_SYSTEM) != 0 ||
+                (flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0;
+
+        String technical = pkg + " " + activity + " " + label;
+
+        if (system && containsAny(technical,
+                "devicesetup", "device_setup", "setupactivity", ".setup",
+                "setupwizard", "wizard", "provision", "provisioning",
+                "systemui", "inputmethod", "factorytest", "factory.test",
+                "diagnostic", "engineeringmode", "tvsettings",
+                "settings.setup", "leanbacklauncher", "tvlauncher")) {
+            return false;
+        }
+
+        // Se il nome mostrato è ancora un identificatore tecnico (es. org.droidtv....),
+        // su un componente di sistema non lo mostriamo come app.
+        if (system && (label.startsWith("org.") || label.startsWith("com.") ||
+                (!pkg.isEmpty() && label.startsWith(pkg)))) {
+            return false;
+        }
+
+        return true;
     }
 
     private String categoryFor(ResolveInfo r, boolean leanback) {
@@ -1173,6 +1217,7 @@ public class MainActivity extends Activity {
                 "Imposta Foyho TV come Home",
                 "Sostituisci il launcher corrente: " + (overrideActive ? "ATTIVO" : "DISATTIVO"),
                 "Oscuramento sfondo",
+                "Backup e ripristino",
                 "Mostra app nascoste"
         };
         new AlertDialog.Builder(this)
@@ -1192,7 +1237,8 @@ public class MainActivity extends Activity {
                     else if (which == 5) requestDefaultHome();
                     else if (which == 6) showLauncherOverrideDialog();
                     else if (which == 7) chooseDim();
-                    else if (which == 8) showHiddenApps();
+                    else if (which == 8) showBackupMenu();
+                    else if (which == 9) showHiddenApps();
                 }).show();
     }
 
@@ -1483,10 +1529,16 @@ public class MainActivity extends Activity {
         addRowTitle("TV & Sistema");
         HorizontalScrollView hsv = new HorizontalScrollView(this);
         hsv.setHorizontalScrollBarEnabled(false);
+        hsv.setClipChildren(false);
+        hsv.setClipToPadding(false);
+
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(dp(3),dp(8),dp(3),dp(18));
-        hsv.addView(row);
+        row.setClipChildren(false);
+        row.setClipToPadding(false);
+        // Più margine sui quattro lati: il tile al 120% non viene più tagliato.
+        row.setPadding(dp(26), dp(24), dp(42), dp(34));
+        hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
 
         row.addView(systemCard("Video locali","▶", v -> openLocalVideo()), mediumAppCardParams());
         row.addView(systemCard("Ingressi","⇄", v -> safeStart("android.settings.TV_INPUT_SETTINGS")), mediumAppCardParams());
@@ -1494,7 +1546,7 @@ public class MainActivity extends Activity {
         row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), mediumAppCardParams());
         row.addView(systemCard("Impostazioni","⚙", v -> safeStart(Settings.ACTION_SETTINGS)), mediumAppCardParams());
         row.addView(systemCard("Altre app","⋯", v -> showOtherApps()), mediumAppCardParams());
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(198)));
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(218)));
     }
 
     private void showOtherApps() {
