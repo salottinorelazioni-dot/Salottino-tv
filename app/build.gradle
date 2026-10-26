@@ -8,8 +8,8 @@ android {
         applicationId 'it.salottino.tv.exp'
         minSdk 21
         targetSdk 35
-        versionCode 16
-        versionName '3.5.1-exp'
+        versionCode 17
+        versionName '3.6.0-exp'
     }
 
     compileOptions {

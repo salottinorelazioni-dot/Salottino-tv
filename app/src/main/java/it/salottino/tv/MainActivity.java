@@ -105,11 +105,9 @@ public class MainActivity extends Activity {
         List<AppItem> fav = favoriteApps();
         if (!fav.isEmpty()) addAppRow("Preferiti", fav);
 
-        addAppRowIfAny("App TV", filterByCategory("tv"));
-        addAppRowIfAny("Streaming & Film", filterByCategory("media"));
-        addAppRowIfAny("Musica", filterByCategory("music"));
-        addAppRowIfAny("Giochi", filterByCategory("games"));
-        addAppRowIfAny("Utility", filterByCategory("tools"));
+        for (String categoryId : getCategoryOrder()) {
+            addAppRowIfAny(categoryDisplay(categoryId), filterByCategory(categoryId));
+        }
 
         addSystemRow();
 
@@ -859,13 +857,18 @@ public class MainActivity extends Activity {
     }
 
     private void showCategoryPicker(AppItem item) {
-        String[] names = {"App TV","Streaming & Film","Musica","Giochi","Utility","Altre app"};
-        String[] ids = {"tv","media","music","games","tools","other"};
+        List<String> idsList = new ArrayList<>(getCategoryOrder());
+        idsList.add("other");
+
+        String[] names = new String[idsList.size()];
+        for (int i=0; i<idsList.size(); i++) names[i] = categoryDisplay(idsList.get(i));
+
         new AlertDialog.Builder(this)
-                .setTitle("Categoria")
+                .setTitle("Sposta " + customLabel(item) + " in…")
                 .setItems(names, (d, which) -> {
-                    prefs.edit().putString("cat_"+item.pkg, ids[which]).apply();
-                    loadApps(); buildHome();
+                    prefs.edit().putString("cat_"+item.pkg, idsList.get(which)).apply();
+                    loadApps();
+                    buildHome();
                 }).show();
     }
 
@@ -1205,6 +1208,214 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private List<String> getCategoryOrder() {
+        List<String> defaults = Arrays.asList("tv","media","music","games","tools");
+        List<String> out = new ArrayList<>();
+
+        String raw = prefs.getString("category_order", "");
+        if (!raw.isEmpty()) {
+            for (String id : raw.split("\\|")) {
+                if (id != null && !id.trim().isEmpty() && !"other".equals(id) && !out.contains(id)) {
+                    out.add(id);
+                }
+            }
+        }
+
+        if (out.isEmpty()) out.addAll(defaults);
+
+        // Le categorie base non si perdono mai.
+        for (String id : defaults) if (!out.contains(id)) out.add(id);
+
+        // Recupera eventuali categorie custom anche dopo un backup/import incompleto.
+        for (String key : prefs.getAll().keySet()) {
+            if (key.startsWith("category_name_custom_")) {
+                String id = key.substring("category_name_".length());
+                if (!out.contains(id)) out.add(id);
+            }
+        }
+        for (AppItem a : apps) {
+            if (a.category != null && a.category.startsWith("custom_") && !out.contains(a.category)) {
+                out.add(a.category);
+            }
+        }
+
+        return out;
+    }
+
+    private void saveCategoryOrder(List<String> order) {
+        prefs.edit().putString("category_order", android.text.TextUtils.join("|", order)).apply();
+    }
+
+    private boolean isBuiltInCategory(String id) {
+        return "tv".equals(id) || "media".equals(id) || "music".equals(id) ||
+                "games".equals(id) || "tools".equals(id);
+    }
+
+    private int countAppsInCategory(String id) {
+        int count = 0;
+        for (AppItem a : apps) if (id.equals(a.category)) count++;
+        return count;
+    }
+
+    private void showCategoryManager() {
+        List<String> ids = getCategoryOrder();
+        String[] items = new String[ids.size() + 1];
+        items[0] = "＋ Crea nuova categoria";
+
+        for (int i=0; i<ids.size(); i++) {
+            String id = ids.get(i);
+            items[i+1] = (i+1) + ".  " + categoryDisplay(id) +
+                    "   (" + countAppsInCategory(id) + " app)";
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Gestisci categorie")
+                .setItems(items, (d, which) -> {
+                    if (which == 0) showCreateCategoryDialog();
+                    else showCategoryActions(ids.get(which-1));
+                })
+                .setNegativeButton("Chiudi", null)
+                .show();
+    }
+
+    private void showCreateCategoryDialog() {
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Nome nuova categoria");
+
+        new AlertDialog.Builder(this)
+                .setTitle("Nuova categoria")
+                .setView(input)
+                .setPositiveButton("Crea", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        Toast.makeText(this, "Inserisci un nome per la categoria", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    String id = "custom_" + System.currentTimeMillis();
+                    List<String> order = getCategoryOrder();
+                    order.add(id);
+
+                    prefs.edit()
+                            .putString("category_name_"+id, name)
+                            .putString("category_order", android.text.TextUtils.join("|", order))
+                            .apply();
+
+                    buildHome();
+                    updateWeather();
+                    Toast.makeText(this, "Categoria «" + name + "» creata", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Annulla", null)
+                .show();
+    }
+
+    private void showCategoryActions(String id) {
+        List<String> order = getCategoryOrder();
+        int index = order.indexOf(id);
+        boolean custom = !isBuiltInCategory(id);
+
+        List<String> actions = new ArrayList<>();
+        actions.add("Rinomina");
+        if (index > 0) actions.add("Sposta verso l’alto");
+        if (index >= 0 && index < order.size()-1) actions.add("Sposta verso il basso");
+        if (custom) actions.add("Elimina categoria");
+
+        String[] options = actions.toArray(new String[0]);
+
+        new AlertDialog.Builder(this)
+                .setTitle(categoryDisplay(id))
+                .setItems(options, (d, which) -> {
+                    String action = options[which];
+                    if ("Rinomina".equals(action)) {
+                        showRenameCategoryDialog(id);
+                    } else if ("Sposta verso l’alto".equals(action)) {
+                        moveCategory(id, -1);
+                    } else if ("Sposta verso il basso".equals(action)) {
+                        moveCategory(id, 1);
+                    } else if ("Elimina categoria".equals(action)) {
+                        confirmDeleteCategory(id);
+                    }
+                })
+                .setNegativeButton("Indietro", (d,w) -> showCategoryManager())
+                .show();
+    }
+
+    private void showRenameCategoryDialog(String id) {
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(categoryDisplay(id));
+        input.setSelectAllOnFocus(true);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Rinomina categoria")
+                .setView(input)
+                .setPositiveButton("Salva", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        Toast.makeText(this, "Il nome non può essere vuoto", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    prefs.edit().putString("category_name_"+id, name).apply();
+                    buildHome();
+                    updateWeather();
+                })
+                .setNegativeButton("Annulla", null)
+                .show();
+    }
+
+    private void moveCategory(String id, int delta) {
+        List<String> order = getCategoryOrder();
+        int i = order.indexOf(id);
+        if (i < 0) return;
+
+        int j = Math.max(0, Math.min(order.size()-1, i + delta));
+        if (i == j) return;
+
+        Collections.swap(order, i, j);
+        saveCategoryOrder(order);
+        buildHome();
+        updateWeather();
+
+        Toast.makeText(this,
+                "«" + categoryDisplay(id) + "» spostata " + (delta < 0 ? "su" : "giù"),
+                Toast.LENGTH_SHORT).show();
+    }
+
+    private void confirmDeleteCategory(String id) {
+        final String name = categoryDisplay(id);
+        int count = countAppsInCategory(id);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Elimina " + name + "?")
+                .setMessage(count > 0
+                        ? "Le " + count + " app presenti verranno spostate in «Altre app»."
+                        : "La categoria verrà rimossa.")
+                .setPositiveButton("Elimina", (d,w) -> deleteCategory(id))
+                .setNegativeButton("Annulla", null)
+                .show();
+    }
+
+    private void deleteCategory(String id) {
+        if (isBuiltInCategory(id)) return;
+
+        SharedPreferences.Editor ed = prefs.edit();
+        for (AppItem a : apps) {
+            if (id.equals(a.category)) ed.putString("cat_"+a.pkg, "other");
+        }
+        ed.remove("category_name_"+id);
+
+        List<String> order = getCategoryOrder();
+        order.remove(id);
+        ed.putString("category_order", android.text.TextUtils.join("|", order));
+        ed.apply();
+
+        loadApps();
+        buildHome();
+        updateWeather();
+        Toast.makeText(this, "Categoria eliminata", Toast.LENGTH_SHORT).show();
+    }
+
     private void showSettings() {
         boolean overrideActive = prefs.getBoolean("override_launcher", false) && isFoyhoAccessibilityEnabled();
         boolean matrixAnim = prefs.getBoolean("matrix_anim", true);
@@ -1217,6 +1428,7 @@ public class MainActivity extends Activity {
                 "Imposta Foyho TV come Home",
                 "Sostituisci il launcher corrente: " + (overrideActive ? "ATTIVO" : "DISATTIVO"),
                 "Oscuramento sfondo",
+                "Gestisci categorie",
                 "Backup e ripristino",
                 "Mostra app nascoste"
         };
@@ -1237,8 +1449,9 @@ public class MainActivity extends Activity {
                     else if (which == 5) requestDefaultHome();
                     else if (which == 6) showLauncherOverrideDialog();
                     else if (which == 7) chooseDim();
-                    else if (which == 8) showBackupMenu();
-                    else if (which == 9) showHiddenApps();
+                    else if (which == 8) showCategoryManager();
+                    else if (which == 9) showBackupMenu();
+                    else if (which == 10) showHiddenApps();
                 }).show();
     }
 
@@ -1726,12 +1939,17 @@ public class MainActivity extends Activity {
     }
 
     private String categoryDisplay(String id) {
+        if ("other".equals(id)) return "Altre app";
+
+        String customName = prefs.getString("category_name_"+id, null);
+        if (customName != null && !customName.trim().isEmpty()) return customName.trim();
+
         if ("tv".equals(id)) return "App TV";
         if ("media".equals(id)) return "Streaming & Film";
         if ("music".equals(id)) return "Musica";
         if ("games".equals(id)) return "Giochi";
         if ("tools".equals(id)) return "Utility";
-        return "Altre app";
+        return "Categoria";
     }
 
     private boolean containsAny(String s, String... needles) {
