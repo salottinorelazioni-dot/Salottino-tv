@@ -1,1395 +1,647 @@
 package it.salottino.tv;
 
-import android.app.*;
-import android.app.role.RoleManager;
-import android.os.*;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
 import android.provider.Settings;
-import android.content.*;
-import android.content.pm.*;
-import android.database.Cursor;
-import android.graphics.*;
-import android.graphics.drawable.*;
-import android.media.tv.TvContract;
-import android.net.Uri;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.view.*;
-import android.widget.*;
-import java.io.*;
-import java.io.*;
-import java.util.Random;
-import java.net.*;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.GridLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+
 import java.text.SimpleDateFormat;
-import java.util.*;
-import org.json.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private static final int REQ_WALLPAPER = 101;
-    private static final int REQ_LOCAL_VIDEO = 102;
-    private static final int REQ_HOME_ROLE = 103;
 
-    private SharedPreferences prefs;
-    private FrameLayout root;
-    private LinearLayout content;
-    private TextView clock, date, weather, focusTitle, focusSubtitle;
-    private TextView inputsIcon, networkIcon, notificationsIcon, matrixOverlay;
-    private final Random matrixRandom = new Random();
-    private Runnable matrixRunnable;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final List<AppItem> apps = new ArrayList<>();
+    private static final int BG = Color.rgb(10, 12, 18);
+    private static final int BG_2 = Color.rgb(16, 20, 28);
+    private static final int CARD = Color.argb(220, 20, 24, 34);
+    private static final int CARD_ALT = Color.argb(220, 24, 30, 42);
+    private static final int STROKE = Color.argb(110, 92, 126, 168);
+    private static final int TEXT = Color.WHITE;
+    private static final int MUTED = Color.rgb(173, 186, 201);
+    private static final int ACCENT = Color.rgb(76, 174, 255);
+    private static final int ACCENT_2 = Color.rgb(59, 223, 180);
+    private static final int GOLD = Color.rgb(255, 199, 87);
 
-    static class AppItem {
-        String pkg, activity, label, category;
-        Drawable icon, banner;
-        boolean leanback;
-        AppItem(String p, String a, String l, String c, Drawable i, Drawable b, boolean lb) {
-            pkg=p; activity=a; label=l; category=c; icon=i; banner=b; leanback=lb;
-        }
-    }
+    private final Handler handler = new Handler();
+    private TextView clockView;
+    private TextView dateView;
+    private TextView weatherView;
+    private TextView heroTitle;
+    private TextView heroSubtitle;
+    private GridLayout appsGrid;
 
-    static class WatchItem {
-        String title, subtitle, intentUri, posterUri;
-        WatchItem(String t, String s, String i, String p) {
-            title=t; subtitle=s; intentUri=i; posterUri=p;
-        }
-    }
-
-    @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
-        prefs = getSharedPreferences("salottino_tv", MODE_PRIVATE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        loadApps();
-        buildHome();
-        updateClock();
-        updateWeather();
-        updateStatusIcons();
-        startMatrixRain();
-    }
-
-    @Override protected void onResume() {
-        super.onResume();
-        if (root != null) {
-            loadApps();
-            buildHome();
+    private final Runnable clockTick = new Runnable() {
+        @Override
+        public void run() {
             updateClock();
-            updateWeather();
-            updateStatusIcons();
-            startMatrixRain();
+            handler.postDelayed(this, 30_000L);
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        hideSystemUi();
+        buildHome();
+        handler.post(clockTick);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        hideSystemUi();
+        updateClock();
+        if (appsGrid != null) {
+            populateApps();
         }
     }
 
-    @Override protected void onDestroy() {
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacks(clockTick);
         super.onDestroy();
-        if (handler != null && matrixRunnable != null) {
-            handler.removeCallbacks(matrixRunnable);
-        }
     }
 
     private void buildHome() {
-        root = new FrameLayout(this);
-        applyBackground();
+        FrameLayout root = new FrameLayout(this);
+        root.setBackground(makeBackground());
 
-        matrixOverlay = new TextView(this);
-        matrixOverlay.setTextColor(0x3314FF5A);
-        matrixOverlay.setTypeface(Typeface.MONOSPACE);
-        matrixOverlay.setTextSize(11);
-        matrixOverlay.setLineSpacing(0f, 0.86f);
-        matrixOverlay.setAlpha(0.22f);
-        matrixOverlay.setPadding(dp(22), dp(22), dp(22), dp(22));
-        matrixOverlay.setFocusable(false);
-        matrixOverlay.setClickable(false);
-        root.addView(matrixOverlay, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.HORIZONTAL);
+        shell.setPadding(dp(18), dp(18), dp(18), dp(18));
+        root.addView(shell, new FrameLayout.LayoutParams(-1, -1));
+
+        shell.addView(buildSideRail());
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(0, -1, 1f);
+        scrollLp.setMargins(dp(18), 0, 0, 0);
+        shell.addView(scroll, scrollLp);
 
-        content = new LinearLayout(this);
+        LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setClipChildren(false);
-        content.setClipToPadding(false);
-        content.setPadding(dp(24), dp(20), dp(14), dp(34));
-        scroll.setClipChildren(false);
-        scroll.setClipToPadding(false);
-        scroll.addView(content, new ScrollView.LayoutParams(-1, -2));
+        content.setPadding(0, 0, dp(6), dp(6));
+        scroll.addView(content, new ViewGroup.LayoutParams(-1, -2));
 
-        buildHeader();
-        buildHero();
+        LinearLayout rowTop = new LinearLayout(this);
+        rowTop.setOrientation(LinearLayout.HORIZONTAL);
+        content.addView(rowTop, new LinearLayout.LayoutParams(-1, -2));
 
-        List<WatchItem> watch = loadWatchNext();
-        if (!watch.isEmpty()) {
-            addWatchNextRow("Guarda successivo", watch);
-        } else {
-            List<AppItem> recent = recentApps();
-            if (!recent.isEmpty()) addAppRow("Aperti di recente", recent);
-        }
+        View hero = buildHeroCard();
+        LinearLayout.LayoutParams heroLp = new LinearLayout.LayoutParams(0, dp(178), 2.2f);
+        heroLp.setMargins(0, 0, dp(16), 0);
+        rowTop.addView(hero, heroLp);
 
-        List<AppItem> fav = favoriteApps();
-        if (!fav.isEmpty()) addAppRow("Preferiti", fav);
+        View calendar = buildCalendarCard();
+        rowTop.addView(calendar, new LinearLayout.LayoutParams(0, dp(178), 1f));
 
-        addAppRowIfAny("App TV", filterByCategory("tv"));
-        addAppRowIfAny("Streaming & Film", filterByCategory("media"));
-        addAppRowIfAny("Musica", filterByCategory("music"));
-        addAppRowIfAny("Giochi", filterByCategory("games"));
-        addAppRowIfAny("Utility", filterByCategory("tools"));
-        addAppRowIfAny("Altre app", filterByCategory("other"));
+        LinearLayout rowBottom = new LinearLayout(this);
+        rowBottom.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowBottomLp = new LinearLayout.LayoutParams(-1, -2);
+        rowBottomLp.setMargins(0, dp(16), 0, 0);
+        content.addView(rowBottom, rowBottomLp);
 
-        addSystemRow();
+        View appsCard = buildAppsCard();
+        LinearLayout.LayoutParams appsLp = new LinearLayout.LayoutParams(0, -2, 2.2f);
+        appsLp.setMargins(0, 0, dp(16), 0);
+        rowBottom.addView(appsCard, appsLp);
 
-        root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout rightColumn = new LinearLayout(this);
+        rightColumn.setOrientation(LinearLayout.VERTICAL);
+        rowBottom.addView(rightColumn, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        View statusCard = buildStatusCard();
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(-1, dp(180));
+        rightColumn.addView(statusCard, statusLp);
+
+        View weatherCard = buildWeatherCard();
+        LinearLayout.LayoutParams weatherLp = new LinearLayout.LayoutParams(-1, dp(204));
+        weatherLp.setMargins(0, dp(16), 0, 0);
+        rightColumn.addView(weatherCard, weatherLp);
+
         setContentView(root);
+        updateClock();
+        populateApps();
     }
 
-    private void buildHeader() {
+    private View buildSideRail() {
+        LinearLayout rail = new LinearLayout(this);
+        rail.setOrientation(LinearLayout.VERTICAL);
+        rail.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        rail.setPadding(dp(10), dp(12), dp(10), dp(12));
+        rail.setBackground(makeRounded(CARD, 28, STROKE, 1));
+        rail.setLayoutParams(new LinearLayout.LayoutParams(dp(96), -1));
+
+        TextView brand = new TextView(this);
+        brand.setText("FOYHO\\nTV");
+        brand.setTextColor(TEXT);
+        brand.setTextSize(17);
+        brand.setGravity(Gravity.CENTER);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        brand.setPadding(0, dp(6), 0, dp(8));
+        rail.addView(brand, new LinearLayout.LayoutParams(-1, -2));
+
+        rail.addView(railButton("⌂", "Home", true, v -> toast("Home")));
+        rail.addView(railButton("▦", "App", false, v -> requestAppsFocus()));
+        rail.addView(railButton("▶", "Media", false, v -> toast("Area media in arrivo")));
+        rail.addView(railButton("⇄", "Ingressi", false, v -> safeStart("android.settings.TV_INPUT_SETTINGS")));
+        rail.addView(railButton("⚙", "Settings", false, v -> safeStart(Settings.ACTION_SETTINGS)));
+
+        View spacer = new View(this);
+        rail.addView(spacer, new LinearLayout.LayoutParams(-1, 0, 1f));
+
+        TextView foot = new TextView(this);
+        foot.setText("Dashboard\\n3.0");
+        foot.setTextColor(MUTED);
+        foot.setGravity(Gravity.CENTER);
+        foot.setTextSize(12);
+        rail.addView(foot, new LinearLayout.LayoutParams(-1, -2));
+
+        return rail;
+    }
+
+    private View railButton(String symbol, String label, boolean selected, View.OnClickListener click) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setFocusable(true);
+        box.setClickable(true);
+        box.setPadding(dp(10), dp(10), dp(10), dp(10));
+        box.setBackground(makeRounded(selected ? Color.argb(255, 40, 92, 145) : Color.TRANSPARENT, 20,
+                selected ? ACCENT : Color.TRANSPARENT, selected ? 2 : 0));
+        box.setOnClickListener(click);
+
+        TextView icon = new TextView(this);
+        icon.setText(symbol);
+        icon.setTextColor(TEXT);
+        icon.setTextSize(20);
+        icon.setGravity(Gravity.CENTER);
+        icon.setTypeface(Typeface.DEFAULT_BOLD);
+
+        TextView txt = new TextView(this);
+        txt.setText(label);
+        txt.setTextColor(selected ? TEXT : MUTED);
+        txt.setTextSize(11);
+        txt.setGravity(Gravity.CENTER);
+
+        box.addView(icon);
+        box.addView(txt);
+
+        box.setOnFocusChangeListener((v, hasFocus) -> {
+            v.animate().scaleX(hasFocus ? 1.08f : 1f).scaleY(hasFocus ? 1.08f : 1f).setDuration(130).start();
+            v.setBackground(makeRounded(hasFocus || selected ? Color.argb(255, 40, 92, 145) : Color.TRANSPARENT,
+                    20, hasFocus || selected ? ACCENT : Color.TRANSPARENT, hasFocus || selected ? 2 : 0));
+        });
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(8), 0, 0);
+        box.setLayoutParams(lp);
+        return box;
+    }
+
+    private View buildHeroCard() {
+        LinearLayout card = cardContainer();
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(24), dp(20), dp(24), dp(20));
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(top, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        top.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView eyebrow = makeText("FOYHO TV", 14, ACCENT_2, true);
+        left.addView(eyebrow);
+
+        heroTitle = makeText("Home Dashboard", 28, TEXT, true);
+        heroTitle.setPadding(0, dp(6), 0, 0);
+        left.addView(heroTitle);
+
+        heroSubtitle = makeText("Launcher pulito, rapido e pensato per la TV", 14, MUTED, false);
+        heroSubtitle.setPadding(0, dp(6), 0, 0);
+        left.addView(heroSubtitle);
+
+        LinearLayout clockBox = new LinearLayout(this);
+        clockBox.setOrientation(LinearLayout.VERTICAL);
+        clockBox.setGravity(Gravity.RIGHT);
+        top.addView(clockBox);
+
+        clockView = makeText("--:--", 34, TEXT, true);
+        clockBox.addView(clockView);
+
+        dateView = makeText("--", 14, MUTED, false);
+        dateView.setGravity(Gravity.RIGHT);
+        clockBox.addView(dateView);
+
+        LinearLayout chips = new LinearLayout(this);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams chipsLp = new LinearLayout.LayoutParams(-2, -2);
+        chipsLp.setMargins(0, dp(18), 0, 0);
+        card.addView(chips, chipsLp);
+
+        chips.addView(infoChip("Sistema", "TV Home"));
+        chips.addView(infoChip("Profilo", "Salottino"));
+        weatherView = infoChip("Meteo", "Sereno 22°C");
+        chips.addView(weatherView);
+
+        return card;
+    }
+
+    private TextView infoChip(String title, String value) {
+        TextView chip = new TextView(this);
+        chip.setText(title + "\\n" + value);
+        chip.setTextColor(TEXT);
+        chip.setTextSize(12);
+        chip.setTypeface(Typeface.DEFAULT_BOLD);
+        chip.setPadding(dp(14), dp(10), dp(14), dp(10));
+        chip.setBackground(makeRounded(Color.argb(160, 33, 41, 58), 18, Color.argb(120, 82, 108, 148), 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.setMargins(0, 0, dp(10), 0);
+        chip.setLayoutParams(lp);
+        return chip;
+    }
+
+    private View buildCalendarCard() {
+        LinearLayout card = cardContainer();
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+
+        card.addView(makeText("Agenda", 18, TEXT, true));
+        TextView sub = makeText("Promemoria rapidi", 12, MUTED, false);
+        sub.setPadding(0, dp(4), 0, dp(14));
+        card.addView(sub);
+
+        card.addView(agendaRow("OGGI", "Controllo launcher", "22:30"));
+        card.addView(agendaRow("DOM", "Backup APK", "10:00"));
+        card.addView(agendaRow("LUN", "Test home button", "18:00"));
+        return card;
+    }
+
+    private View agendaRow(String day, String title, String time) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(10), dp(10), dp(10), dp(10));
+        row.setBackground(makeRounded(Color.argb(125, 26, 33, 46), 16, Color.argb(70, 81, 108, 145), 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(8));
+        row.setLayoutParams(lp);
+
+        TextView tag = new TextView(this);
+        tag.setText(day);
+        tag.setTextColor(ACCENT);
+        tag.setTextSize(11);
+        tag.setTypeface(Typeface.DEFAULT_BOLD);
+        row.addView(tag, new LinearLayout.LayoutParams(dp(46), -2));
+
+        LinearLayout txtBox = new LinearLayout(this);
+        txtBox.setOrientation(LinearLayout.VERTICAL);
+        row.addView(txtBox, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        txtBox.addView(makeText(title, 13, TEXT, true));
+        txtBox.addView(makeText("Foyho planner", 11, MUTED, false));
+
+        TextView clock = makeText(time, 12, GOLD, true);
+        row.addView(clock);
+        return row;
+    }
+
+    private View buildAppsCard() {
+        LinearLayout card = cardContainer();
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setClipChildren(false);
-        header.setClipToPadding(false);
+        card.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout brand = new LinearLayout(this);
-        brand.setOrientation(LinearLayout.VERTICAL);
-        TextView title = label("FOYHO TV", 27, Color.WHITE);
-        title.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        title.setLetterSpacing(.04f);
-        TextView sub = label("Home", 13, 0xFF8EFFB0);
-        brand.addView(title);
-        brand.addView(sub);
-        header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        header.addView(titles, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        LinearLayout timeBox = new LinearLayout(this);
-        timeBox.setOrientation(LinearLayout.VERTICAL);
-        timeBox.setGravity(Gravity.RIGHT);
+        titles.addView(makeText("App", 20, TEXT, true));
+        TextView sub = makeText("Le tue app principali", 12, MUTED, false);
+        sub.setPadding(0, dp(4), 0, 0);
+        titles.addView(sub);
 
-        LinearLayout topInfo = new LinearLayout(this);
-        topInfo.setOrientation(LinearLayout.HORIZONTAL);
-        topInfo.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        TextView hint = new TextView(this);
+        hint.setText("OK per aprire");
+        hint.setTextColor(ACCENT_2);
+        hint.setTextSize(12);
+        hint.setTypeface(Typeface.DEFAULT_BOLD);
+        header.addView(hint);
 
-        LinearLayout iconBox = new LinearLayout(this);
-        iconBox.setOrientation(LinearLayout.HORIZONTAL);
-        iconBox.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
-
-        inputsIcon = topStatusIcon("⇄", "Ingressi");
-        inputsIcon.setOnClickListener(v -> safeStart("android.settings.TV_INPUT_SETTINGS"));
-        iconBox.addView(inputsIcon);
-
-        networkIcon = topStatusIcon("⌁", "Rete");
-        networkIcon.setOnClickListener(v -> safeStart(Settings.ACTION_WIFI_SETTINGS));
-        iconBox.addView(networkIcon);
-
-        notificationsIcon = topStatusIcon("🔔", "Notifiche");
-        notificationsIcon.setOnClickListener(v -> openNotificationsPanel());
-        iconBox.addView(notificationsIcon);
-
-        LinearLayout.LayoutParams ibp = new LinearLayout.LayoutParams(-2, -2);
-        ibp.setMargins(0, 0, dp(16), 0);
-        topInfo.addView(iconBox, ibp);
-
-        weather = label("☁ --°C", 14, 0xFF8EFFB0);
-        weather.setSingleLine(true);
-        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
-        wp.setMargins(0, 0, dp(16), 0);
-        topInfo.addView(weather, wp);
-
-        clock = label("", 26, Color.WHITE);
-        clock.setTypeface(null, Typeface.BOLD);
-        topInfo.addView(clock);
-
-        date = label("", 12, 0xFFB7C0CB);
-        date.setGravity(Gravity.RIGHT);
-
-        timeBox.addView(topInfo);
-        timeBox.addView(date);
-        header.addView(timeBox);
-
-        Button customize = smallButton("Personalizza");
-        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(dp(164), dp(50));
-        cbp.setMargins(dp(20), dp(5), dp(10), dp(5));
-        customize.setOnClickListener(v -> showSettings());
-        customize.setOnFocusChangeListener((v, focused) -> {
-            v.animate()
-                    .scaleX(focused ? 1.09f : 1f)
-                    .scaleY(focused ? 1.09f : 1f)
-                    .setDuration(120)
-                    .start();
-            GradientDrawable g = new GradientDrawable();
-            g.setColor(focused ? 0xFF16C95A : 0x7734D96B);
-            g.setCornerRadius(dp(18));
-            g.setStroke(dp(focused ? 3 : 1), focused ? Color.WHITE : 0xAA58FF89);
-            v.setBackground(g);
-            if (focused && focusTitle != null) {
-                focusTitle.setText("Personalizza");
-                focusSubtitle.setText("Sfondo, meteo, launcher predefinito e altre opzioni");
-            }
-        });
-        header.addView(customize, cbp);
-
-        content.addView(header);
-    }
-
-    private void buildHero() {
-        LinearLayout hero = new LinearLayout(this);
-        hero.setOrientation(LinearLayout.VERTICAL);
-        hero.setPadding(0, dp(34), 0, dp(20));
-
-        focusTitle = label("Scegli cosa guardare.", 30, Color.WHITE);
-        focusTitle.setTypeface(null, Typeface.BOLD);
-        focusSubtitle = label("FOYHO TV • tieni premuto su un'app per personalizzarla", 15, 0xFFD1D6DD);
-
-        hero.addView(focusTitle);
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1,-2);
-        sp.setMargins(0, dp(8), 0, 0);
-        hero.addView(focusSubtitle, sp);
-        content.addView(hero);
-    }
-
-    private void addWatchNextRow(String title, List<WatchItem> list) {
-        addRowTitle(title);
         HorizontalScrollView hsv = new HorizontalScrollView(this);
         hsv.setHorizontalScrollBarEnabled(false);
-        hsv.setClipChildren(false);
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setClipChildren(false);
-        row.setPadding(dp(3), dp(8), dp(3), dp(18));
-        hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
+        hsv.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout.LayoutParams hsvLp = new LinearLayout.LayoutParams(-1, -2);
+        hsvLp.setMargins(0, dp(16), 0, 0);
+        card.addView(hsv, hsvLp);
 
-        int count = Math.min(12, list.size());
-        for (int x=0; x<count; x++) {
-            WatchItem item = list.get(x);
-            row.addView(createWatchCard(item), wideCardParams());
-        }
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(188)));
+        appsGrid = new GridLayout(this);
+        appsGrid.setColumnCount(4);
+        appsGrid.setRowCount(4);
+        appsGrid.setUseDefaultMargins(false);
+        hsv.addView(appsGrid, new ViewGroup.LayoutParams(-2, -2));
+
+        return card;
     }
 
-    private View createWatchCard(WatchItem item) {
-        FrameLayout card = baseFrameCard();
-        ImageView art = new ImageView(this);
-        art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        if (item.posterUri != null) {
-            try { art.setImageURI(Uri.parse(item.posterUri)); } catch(Exception ignored) {}
-        }
-        card.addView(art, new FrameLayout.LayoutParams(-1,-1));
+    private View buildStatusCard() {
+        LinearLayout card = cardContainer();
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
 
-        View shade = new View(this);
-        GradientDrawable gd = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0xCC000000});
-        shade.setBackground(gd);
-        card.addView(shade, new FrameLayout.LayoutParams(-1,-1));
+        card.addView(makeText("Stato", 18, TEXT, true));
+        TextView sub = makeText("Sistema e collegamenti", 12, MUTED, false);
+        sub.setPadding(0, dp(4), 0, dp(14));
+        card.addView(sub);
+
+        card.addView(statusRow("Launcher", "Foyho TV attivo", ACCENT_2));
+        card.addView(statusRow("Rete", "Controllo rapido dalle impostazioni", ACCENT));
+        card.addView(statusRow("Ingresso", "HDMI / TV / App", GOLD));
+        card.addView(statusRow("Focus", "Tile con evidenza luminosa", Color.WHITE));
+        return card;
+    }
+
+    private View statusRow(String label, String value, int color) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(10));
+        row.setLayoutParams(lp);
+
+        View dot = new View(this);
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(color);
+        gd.setShape(GradientDrawable.OVAL);
+        dot.setBackground(gd);
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(10), dp(10));
+        dotLp.setMargins(0, 0, dp(10), 0);
+        row.addView(dot, dotLp);
 
         LinearLayout textBox = new LinearLayout(this);
         textBox.setOrientation(LinearLayout.VERTICAL);
-        textBox.setGravity(Gravity.BOTTOM);
-        textBox.setPadding(dp(14), dp(12), dp(14), dp(12));
-        TextView t = label(item.title == null ? "Continua a guardare" : item.title, 16, Color.WHITE);
-        t.setTypeface(null, Typeface.BOLD);
-        t.setSingleLine(true);
-        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        TextView s = label(item.subtitle == null ? "Guarda successivo" : item.subtitle, 12, 0xFFD2D6DB);
-        s.setSingleLine(true);
-        textBox.addView(t);
-        textBox.addView(s);
-        card.addView(textBox, new FrameLayout.LayoutParams(-1,-1));
+        row.addView(textBox);
+        textBox.addView(makeText(label, 13, TEXT, true));
+        textBox.addView(makeText(value, 11, MUTED, false));
+        return row;
+    }
 
-        card.setOnClickListener(v -> {
-            if (item.intentUri != null) {
-                try { startActivity(Intent.parseUri(item.intentUri, Intent.URI_INTENT_SCHEME)); }
-                catch(Exception ignored) {}
-            }
-        });
-        focusBehavior(card, t.getText().toString(), "Guarda successivo");
+    private View buildWeatherCard() {
+        LinearLayout card = cardContainer();
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+
+        card.addView(makeText("Panoramica", 18, TEXT, true));
+        TextView sub = makeText("Widget estetico", 12, MUTED, false);
+        sub.setPadding(0, dp(4), 0, dp(14));
+        card.addView(sub);
+
+        LinearLayout main = new LinearLayout(this);
+        main.setOrientation(LinearLayout.HORIZONTAL);
+        main.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(main, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        main.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        left.addView(makeText("Sereno", 15, MUTED, false));
+        left.addView(makeText("22°", 40, TEXT, true));
+        left.addView(makeText("Interfaccia pulita e leggibile", 12, MUTED, false));
+
+        TextView icon = new TextView(this);
+        icon.setText("☀");
+        icon.setTextSize(52);
+        icon.setTextColor(GOLD);
+        main.addView(icon);
+
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(-1, -2);
+        footerLp.setMargins(0, dp(18), 0, 0);
+        card.addView(footer, footerLp);
+
+        footer.addView(miniStat("Sunrise", "06:58"), new LinearLayout.LayoutParams(0, -2, 1f));
+        footer.addView(miniStat("Sunset", "18:12"), new LinearLayout.LayoutParams(0, -2, 1f));
         return card;
     }
 
-    private void addAppRowIfAny(String title, List<AppItem> list) {
-        if (!list.isEmpty()) addAppRow(title, list);
+    private View miniStat(String k, String v) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(12), dp(10), dp(12), dp(10));
+        box.setBackground(makeRounded(Color.argb(120, 26, 33, 46), 16, Color.argb(70, 81, 108, 145), 1));
+        box.addView(makeText(k, 11, MUTED, false));
+        box.addView(makeText(v, 14, TEXT, true));
+        return box;
     }
 
-    private void addAppRow(String title, List<AppItem> list) {
-        addRowTitle(title);
-
-        HorizontalScrollView hsv = new HorizontalScrollView(this);
-        hsv.setHorizontalScrollBarEnabled(false);
-        hsv.setClipChildren(false);
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setClipChildren(false);
-        row.setPadding(dp(3), dp(8), dp(3), dp(18));
-        hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
-
-        for (AppItem item : list) row.addView(createAppCard(item), appCardParams(list.size()));
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, responsiveCardHeight(list.size())+dp(30)));
-    }
-
-    private void addRowTitle(String title) {
-        TextView rowTitle = label(title, 19, Color.WHITE);
-        rowTitle.setTypeface(null, Typeface.BOLD);
-        LinearLayout.LayoutParams rtp = new LinearLayout.LayoutParams(-1,-2);
-        rtp.setMargins(0, dp(10), 0, dp(7));
-        content.addView(rowTitle, rtp);
-    }
-
-    private View createAppCard(AppItem item) {
-        FrameLayout card = baseFrameCard();
-
-        ImageView art = new ImageView(this);
-        if (item.banner != null) {
-            art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            art.setImageDrawable(item.banner);
-        } else {
-            art.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-            art.setPadding(dp(18), dp(14), dp(18), dp(26));
-            art.setImageDrawable(item.icon);
-            art.setBackground(appFallbackGradient(item.pkg));
-        }
-        card.addView(art, new FrameLayout.LayoutParams(-1,-1));
-
-        View shade = new View(this);
-        GradientDrawable shadeBg = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0x22000000, 0xD5000000});
-        shade.setBackground(shadeBg);
-        card.addView(shade, new FrameLayout.LayoutParams(-1,-1));
-
-        TextView name = label(customLabel(item), 14, Color.WHITE);
-        name.setGravity(Gravity.LEFT | Gravity.BOTTOM);
-        name.setTypeface(null, Typeface.BOLD);
-        name.setSingleLine(true);
-        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        name.setPadding(dp(13), 0, dp(13), dp(11));
-        card.addView(name, new FrameLayout.LayoutParams(-1,-1));
-
-        card.setOnClickListener(v -> launchApp(item));
-        card.setOnLongClickListener(v -> {
-            showAppMenu(item);
-            return true;
-        });
-
-        focusBehavior(card, customLabel(item), categoryDisplay(item.category) + " • tieni premuto per le opzioni");
-        return card;
-    }
-
-    private FrameLayout baseFrameCard() {
-        FrameLayout card = new FrameLayout(this);
-        card.setFocusable(true);
-        card.setClickable(true);
-        card.setBackground(cardBorder(false));
+    private LinearLayout cardContainer() {
+        LinearLayout c = new LinearLayout(this);
+        c.setBackground(makeRounded(CARD, 28, STROKE, 1));
         if (Build.VERSION.SDK_INT >= 21) {
-            card.setClipToOutline(true);
-            card.setElevation(dp(5));
+            c.setElevation(dp(3));
         }
-        return card;
+        return c;
     }
 
-    private GradientDrawable cardBorder(boolean focused) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(0x33101714);
-        g.setCornerRadius(dp(18));
-        g.setStroke(dp(focused ? 3 : 1), focused ? 0xFF58FF89 : 0x554C6657);
-        return g;
+    private void populateApps() {
+        appsGrid.removeAllViews();
+        List<ResolveInfo> apps = loadLaunchableApps();
+        int max = Math.min(12, apps.size());
+        for (int i = 0; i < max; i++) {
+            ResolveInfo ri = apps.get(i);
+            appsGrid.addView(buildAppTile(ri));
+        }
+        if (appsGrid.getChildCount() > 0) {
+            appsGrid.getChildAt(0).requestFocus();
+        }
     }
 
-    private LinearLayout.LayoutParams appCardParams() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(cardWidth(), cardHeight());
-        lp.setMargins(0,0,dp(14),0);
-        return lp;
-    }
+    private View buildAppTile(ResolveInfo ri) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setPadding(dp(14), dp(14), dp(14), dp(14));
+        tile.setBackground(makeRounded(CARD_ALT, 22, Color.argb(90, 84, 110, 148), 1));
 
-    private LinearLayout.LayoutParams appCardParams(int itemCount) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                responsiveCardWidth(itemCount),
-                responsiveCardHeight(itemCount));
-        lp.setMargins(0,0,dp(14),0);
-        return lp;
-    }
+        GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+        lp.width = dp(150);
+        lp.height = dp(106);
+        lp.setMargins(0, 0, dp(12), dp(12));
+        tile.setLayoutParams(lp);
 
-    private int responsiveCardWidth(int itemCount) {
-        int screen = getResources().getDisplayMetrics().widthPixels;
-        int available = Math.max(dp(640), screen - dp(52));
-        int size = prefs.getInt("card_size", 1);
+        Drawable iconDrawable;
+        CharSequence label;
+        try {
+            iconDrawable = ri.loadIcon(getPackageManager());
+            label = ri.loadLabel(getPackageManager());
+        } catch (Exception e) {
+            iconDrawable = null;
+            label = ri.activityInfo.packageName;
+        }
 
-        int columns = size == 0 ? 5 : (size == 2 ? 3 : 4);
-        if (itemCount == 1) columns = 3;
-        else if (itemCount > 1 && itemCount < columns) columns = itemCount;
+        ImageView icon = new ImageView(this);
+        icon.setImageDrawable(iconDrawable);
+        icon.setAdjustViewBounds(true);
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        tile.addView(icon, iconLp);
 
-        int gaps = dp(14) * Math.max(0, columns - 1);
-        return Math.max(dp(180), (available - gaps) / columns);
-    }
+        TextView name = new TextView(this);
+        name.setText(String.valueOf(label));
+        name.setTextColor(TEXT);
+        name.setTextSize(12);
+        name.setMaxLines(2);
+        name.setGravity(Gravity.CENTER);
+        name.setPadding(0, dp(10), 0, 0);
+        tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
 
-    private int responsiveCardHeight(int itemCount) {
-        int size = prefs.getInt("card_size", 1);
-        int max = size == 0 ? dp(126) : (size == 2 ? dp(190) : dp(165));
-        return Math.min(max, (int)(responsiveCardWidth(itemCount) * 0.60f));
-    }
-
-    private LinearLayout.LayoutParams wideCardParams() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(290), dp(160));
-        lp.setMargins(0,0,dp(16),0);
-        return lp;
-    }
-
-    private void focusBehavior(View view, String title, String subtitle) {
-        view.setOnFocusChangeListener((v, focused) -> {
-            v.animate()
-                    .scaleX(focused ? 1.09f : 1f)
-                    .scaleY(focused ? 1.09f : 1f)
-                    .setDuration(120)
-                    .start();
-
+        tile.setOnClickListener(v -> launchApp(ri));
+        tile.setOnFocusChangeListener((v, hasFocus) -> {
+            v.animate().scaleX(hasFocus ? 1.06f : 1f).scaleY(hasFocus ? 1.06f : 1f).setDuration(140).start();
+            v.setBackground(makeRounded(hasFocus ? Color.argb(255, 38, 60, 92) : CARD_ALT,
+                    22, hasFocus ? ACCENT_2 : Color.argb(90, 84, 110, 148), hasFocus ? 2 : 1));
             if (Build.VERSION.SDK_INT >= 21) {
-                v.setElevation(dp(focused ? 14 : 5));
+                v.setElevation(hasFocus ? dp(8) : 0f);
             }
-
-            if (Build.VERSION.SDK_INT >= 23 && v instanceof FrameLayout) {
-                ((FrameLayout) v).setForeground(focusRing(focused));
-            } else {
-                v.setBackground(cardBorder(focused));
-            }
-
-            if (focused && focusTitle != null) {
-                focusTitle.setText(title);
-                focusSubtitle.setText(subtitle);
+            if (hasFocus) {
+                String title = String.valueOf(label);
+                heroTitle.setText(title);
+                heroSubtitle.setText("Premi OK per aprire l'app selezionata");
             }
         });
+        return tile;
     }
 
-    private GradientDrawable focusRing(boolean focused) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(Color.TRANSPARENT);
-        g.setCornerRadius(dp(18));
-        g.setStroke(
-                dp(focused ? 4 : 1),
-                focused ? 0xFF39FF75 : 0x004C6657
-        );
-        return g;
-    }
-
-    private Drawable appFallbackGradient(String seed) {
-        int h = Math.abs(seed.hashCode());
-        int g = 60 + (h % 60);
-        int b = 40 + ((h / 7) % 70);
-        GradientDrawable d = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(8, 32 + g/3, 18), Color.rgb(10, 16, b), Color.rgb(3, 14, 8)});
-        d.setCornerRadius(dp(18));
-        return d;
-    }
-
-    private void applyBackground() {
-        String custom = prefs.getString("wallpaper_uri", null);
-        if (custom == null) {
-            root.addView(new CyberBackgroundView(this), new FrameLayout.LayoutParams(-1,-1));
-        } else {
-            ImageView bg = new ImageView(this);
-            bg.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            try { bg.setImageURI(Uri.parse(custom)); } catch(Exception ignored) {}
-            root.addView(bg, new FrameLayout.LayoutParams(-1,-1));
-        }
-
-        View dim = new View(this);
-        int level = prefs.getInt("dim", 28);
-        dim.setBackgroundColor(Color.argb((int)(255*(level/100f)), 0,0,0));
-        root.addView(dim, new FrameLayout.LayoutParams(-1,-1));
-    }
-
-    class CyberBackgroundView extends View {
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Random random = new Random(2202);
-
-        CyberBackgroundView(Context c) { super(c); }
-
-        @Override protected void onDraw(Canvas c) {
-            super.onDraw(c);
-            int w = getWidth(), h = getHeight();
-
-            Paint bg = new Paint();
-            bg.setShader(new LinearGradient(0,0,w,h,
-                    new int[]{0xFF020806,0xFF071A11,0xFF050714,0xFF020705},
-                    null, Shader.TileMode.CLAMP));
-            c.drawRect(0,0,w,h,bg);
-
-            Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
-            glow.setColor(0x1438FF7A);
-            c.drawCircle(w*.18f, h*.32f, h*.34f, glow);
-            glow.setColor(0x1223C96A);
-            c.drawCircle(w*.78f, h*.72f, h*.42f, glow);
-            glow.setColor(0x101A4DFF);
-            c.drawCircle(w*.58f, h*.28f, h*.28f, glow);
-
-            paint.setTypeface(Typeface.MONOSPACE);
-            paint.setTextSize(Math.max(15, w/105f));
-            float stepX = Math.max(27, w/50f);
-            float stepY = paint.getTextSize()*1.35f;
-            String chars = "01アイウエオカキクケコサシスセソABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-            random.setSeed(2202);
-            for (float x=0; x<w; x+=stepX) {
-                float start = -random.nextInt(Math.max(1,h/2));
-                int len = 14 + random.nextInt(24);
-                for (int i=0;i<len;i++) {
-                    float y = start + i*stepY;
-                    if (y < -stepY || y > h+stepY) continue;
-                    char ch = chars.charAt(random.nextInt(chars.length()));
-                    int alpha = Math.max(14, 115 - i*4);
-                    paint.setColor(Color.argb(alpha, 70, 255, 120));
-                    c.drawText(String.valueOf(ch), x, y, paint);
-                }
-            }
-
-            Paint brand = new Paint(Paint.ANTI_ALIAS_FLAG);
-            brand.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-            brand.setTextAlign(Paint.Align.RIGHT);
-            brand.setTextSize(Math.min(w*.145f, h*.24f));
-            brand.setColor(0x1658FF89);
-            c.drawText("FOYHO", w*.94f, h*.63f, brand);
-            brand.setTextSize(Math.min(w*.055f, h*.09f));
-            brand.setColor(0x2458FF89);
-            c.drawText("TV", w*.94f, h*.72f, brand);
-        }
-    }
-
-    private void loadApps() {
-        apps.clear();
+    private List<ResolveInfo> loadLaunchableApps() {
         PackageManager pm = getPackageManager();
-        LinkedHashMap<String, ResolveInfo> found = new LinkedHashMap<>();
-        HashSet<String> leanbackPkgs = new HashSet<>();
-
-        Intent lean = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
-        for (ResolveInfo r : pm.queryIntentActivities(lean, 0)) {
-            found.put(r.activityInfo.packageName, r);
-            leanbackPkgs.add(r.activityInfo.packageName);
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+        List<ResolveInfo> apps = pm.queryIntentActivities(intent, 0);
+        if (apps == null || apps.isEmpty()) {
+            Intent fallback = new Intent(Intent.ACTION_MAIN);
+            fallback.addCategory(Intent.CATEGORY_LAUNCHER);
+            apps = pm.queryIntentActivities(fallback, 0);
         }
-
-        Intent normal = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-        for (ResolveInfo r : pm.queryIntentActivities(normal, 0)) {
-            if (!found.containsKey(r.activityInfo.packageName)) found.put(r.activityInfo.packageName, r);
-        }
-
-        Set<String> hidden = getSet("hidden");
-        for (ResolveInfo r : found.values()) {
-            String pkg = r.activityInfo.packageName;
-            if (pkg.equals(getPackageName()) || hidden.contains(pkg)) continue;
-
-            Drawable icon = r.loadIcon(pm);
-            Drawable banner = null;
-            try { banner = r.activityInfo.loadBanner(pm); } catch(Exception ignored) {}
-            if (banner == null) {
-                try { banner = r.activityInfo.applicationInfo.loadBanner(pm); } catch(Exception ignored) {}
-            }
-
-            String label = String.valueOf(r.loadLabel(pm));
-            boolean lb = leanbackPkgs.contains(pkg);
-            apps.add(new AppItem(pkg, r.activityInfo.name, label, categoryFor(r, lb), icon, banner, lb));
-        }
-
-        List<String> order = getOrder();
-        Collections.sort(apps, (a,b) -> {
-            int ia = order.indexOf(a.pkg), ib = order.indexOf(b.pkg);
-            if (ia >= 0 && ib >= 0) return Integer.compare(ia,ib);
-            if (ia >= 0) return -1;
-            if (ib >= 0) return 1;
-            return a.label.compareToIgnoreCase(b.label);
-        });
-
-        boolean changed = false;
-        for (AppItem a : apps) if (!order.contains(a.pkg)) { order.add(a.pkg); changed = true; }
-        if (changed) saveOrder(order);
+        if (apps == null) apps = new ArrayList<>();
+        Collections.sort(apps, (a, b) -> String.valueOf(a.loadLabel(pm)).compareToIgnoreCase(String.valueOf(b.loadLabel(pm))));
+        return apps;
     }
 
-    private String categoryFor(ResolveInfo r, boolean leanback) {
-        String pkg = r.activityInfo.packageName;
-        String custom = prefs.getString("cat_"+pkg, null);
-        if (custom != null) return custom;
-
-        String all = (pkg + " " + r.loadLabel(getPackageManager())).toLowerCase(Locale.ROOT);
-
-        if (containsAny(all, "spotify","music","musica","radio","tunein","deezer","tidal","soundcloud")) return "music";
-        if (containsAny(all, "netflix","prime video","disney","raiplay","rai play","mediaset","infinity","dazn",
-                "youtube","plex","paramount","apple tv","now tv","stream","film","movie","video")) return "media";
-        if (containsAny(all, "live tv","livetv","tv app","tvplayer","kodi","iptv","tivimate","smarttube","rb live","live77","nerozone")) return "tv";
-        if (containsAny(all, "game","giochi","steam","retroarch","moonlight","geforce","xbox")) return "games";
-        if (containsAny(all, "settings","impostazioni","file","manager","browser","utility","tools","store","installer")) return "tools";
-
-        if (Build.VERSION.SDK_INT >= 26) {
-            int c = r.activityInfo.applicationInfo.category;
-            if (c == ApplicationInfo.CATEGORY_GAME) return "games";
-            if (c == ApplicationInfo.CATEGORY_AUDIO) return "music";
-            if (c == ApplicationInfo.CATEGORY_VIDEO) return "media";
-            if (c == ApplicationInfo.CATEGORY_PRODUCTIVITY) return "tools";
-        }
-        if (leanback) return "tv";
-        return "other";
-    }
-
-    private List<AppItem> filterByCategory(String category) {
-        List<AppItem> out = new ArrayList<>();
-        for (AppItem a : apps) if (category.equals(a.category)) out.add(a);
-        return out;
-    }
-
-    private List<AppItem> favoriteApps() {
-        Set<String> fav = getSet("favorites");
-        List<AppItem> out = new ArrayList<>();
-        for (AppItem a : apps) if (fav.contains(a.pkg)) out.add(a);
-        return out;
-    }
-
-    private List<AppItem> recentApps() {
-        List<AppItem> out = new ArrayList<>(apps);
-        Collections.sort(out, (a,b) -> Long.compare(
-                prefs.getLong("last_"+b.pkg, 0),
-                prefs.getLong("last_"+a.pkg, 0)));
-        List<AppItem> result = new ArrayList<>();
-        for (AppItem a : out) {
-            if (prefs.getLong("last_"+a.pkg, 0) > 0 && result.size() < 8) result.add(a);
-        }
-        return result;
-    }
-
-    private List<WatchItem> loadWatchNext() {
-        List<WatchItem> out = new ArrayList<>();
-        if (Build.VERSION.SDK_INT < 26) return out;
-        Cursor c = null;
+    private void launchApp(ResolveInfo ri) {
         try {
-            String[] projection = {
-                    TvContract.WatchNextPrograms.COLUMN_TITLE,
-                    TvContract.WatchNextPrograms.COLUMN_EPISODE_TITLE,
-                    TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION,
-                    TvContract.WatchNextPrograms.COLUMN_INTENT_URI,
-                    TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI,
-                    TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS
-            };
-            c = getContentResolver().query(
-                    TvContract.WatchNextPrograms.CONTENT_URI,
-                    projection, null, null,
-                    TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC");
-            if (c != null) {
-                int t = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_TITLE);
-                int e = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_EPISODE_TITLE);
-                int s = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_SHORT_DESCRIPTION);
-                int i = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_INTENT_URI);
-                int p = c.getColumnIndex(TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI);
-                while (c.moveToNext() && out.size() < 12) {
-                    String title = t >= 0 ? c.getString(t) : null;
-                    String ep = e >= 0 ? c.getString(e) : null;
-                    String sub = ep != null && !ep.isEmpty() ? ep : (s >= 0 ? c.getString(s) : null);
-                    out.add(new WatchItem(title, sub, i >= 0 ? c.getString(i) : null, p >= 0 ? c.getString(p) : null));
-                }
-            }
-        } catch(Exception ignored) {
-            out.clear();
-        } finally {
-            if (c != null) c.close();
-        }
-        return out;
-    }
-
-    private void launchApp(AppItem item) {
-        prefs.edit().putLong("last_"+item.pkg, System.currentTimeMillis()).apply();
-        try {
-            Intent i = new Intent();
-            i.setClassName(item.pkg, item.activity);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-        } catch(Exception e) {
-            Intent i = getPackageManager().getLaunchIntentForPackage(item.pkg);
-            if (i != null) startActivity(i);
+            Intent launch = new Intent(Intent.ACTION_MAIN);
+            launch.addCategory(Intent.CATEGORY_LAUNCHER);
+            launch.setClassName(ri.activityInfo.packageName, ri.activityInfo.name);
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(launch);
+        } catch (Exception e) {
+            Toast.makeText(this, "Impossibile aprire l'app", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void showAppMenu(AppItem item) {
-        Set<String> fav = getSet("favorites");
-        boolean isFav = fav.contains(item.pkg);
-        String[] options = {
-                isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti",
-                "Cambia categoria",
-                "Sposta a sinistra",
-                "Sposta a destra",
-                "Nascondi app"
-        };
-
-        new AlertDialog.Builder(this)
-                .setTitle(customLabel(item))
-                .setItems(options, (d, which) -> {
-                    if (which == 0) {
-                        Set<String> set = getSet("favorites");
-                        if (set.contains(item.pkg)) set.remove(item.pkg); else set.add(item.pkg);
-                        saveSet("favorites", set);
-                        buildHome();
-                    } else if (which == 1) {
-                        showCategoryPicker(item);
-                    } else if (which == 2) {
-                        moveApp(item.pkg, -1);
-                    } else if (which == 3) {
-                        moveApp(item.pkg, 1);
-                    } else if (which == 4) {
-                        Set<String> hidden = getSet("hidden");
-                        hidden.add(item.pkg);
-                        saveSet("hidden", hidden);
-                        loadApps(); buildHome();
-                    }
-                }).show();
-    }
-
-    private void showCategoryPicker(AppItem item) {
-        String[] names = {"App TV","Streaming & Film","Musica","Giochi","Utility","Altre app"};
-        String[] ids = {"tv","media","music","games","tools","other"};
-        new AlertDialog.Builder(this)
-                .setTitle("Categoria")
-                .setItems(names, (d, which) -> {
-                    prefs.edit().putString("cat_"+item.pkg, ids[which]).apply();
-                    loadApps(); buildHome();
-                }).show();
-    }
-
-    private void moveApp(String pkg, int delta) {
-        List<String> order = getOrder();
-        int i = order.indexOf(pkg);
-        if (i < 0) return;
-        int j = Math.max(0, Math.min(order.size()-1, i+delta));
-        Collections.swap(order, i, j);
-        saveOrder(order);
-        loadApps(); buildHome();
-    }
-
-    private void showSettings() {
-        boolean overrideActive = prefs.getBoolean("override_launcher", false) && isFoyhoAccessibilityEnabled();
-        String[] options = {
-                "Scegli sfondo personale",
-                "Ripristina sfondo Foyho",
-                "Città meteo",
-                "Imposta Foyho TV come Home",
-                "Sostituisci il launcher corrente: " + (overrideActive ? "ATTIVO" : "DISATTIVO"),
-                "Dimensione tile",
-                "Oscuramento sfondo",
-                "Mostra app nascoste"
-        };
-        new AlertDialog.Builder(this)
-                .setTitle("Personalizza Foyho TV")
-                .setItems(options, (d, which) -> {
-                    if (which == 0) chooseWallpaper();
-                    else if (which == 1) {
-                        prefs.edit().remove("wallpaper_uri").apply();
-                        buildHome();
-                        updateWeather();
-                    } else if (which == 2) showWeatherCityDialog();
-                    else if (which == 3) requestDefaultHome();
-                    else if (which == 4) showLauncherOverrideDialog();
-                    else if (which == 5) chooseCardSize();
-                    else if (which == 6) chooseDim();
-                    else if (which == 7) showHiddenApps();
-                }).show();
-    }
-
-    private void showLauncherOverrideDialog() {
-        boolean requested = prefs.getBoolean("override_launcher", false);
-        boolean serviceEnabled = isFoyhoAccessibilityEnabled();
-        boolean projectivyAccessibility = isAccessibilityPackageEnabled("com.spocky.projengmenu");
-
-        String status = requested && serviceEnabled
-                ? "ATTIVO"
-                : (requested ? "DA ABILITARE IN ACCESSIBILITÀ" : "DISATTIVO");
-
-        String message = "Stato: " + status +
-                "\n\nQuando è attivo, Foyho TV intercetta il ritorno a un altro launcher e riporta automaticamente alla Home Foyho.";
-
-        if (projectivyAccessibility) {
-            message += "\n\nAttenzione: Projectivy risulta attivo nei servizi di Accessibilità. Per evitare che i due launcher si richiamino a vicenda, disattiva in Projectivy «Sostituisci il launcher corrente».";
+    private void requestAppsFocus() {
+        if (appsGrid != null && appsGrid.getChildCount() > 0) {
+            appsGrid.getChildAt(0).requestFocus();
         }
-
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle("Sostituisci il launcher corrente")
-                .setMessage(message)
-                .setNegativeButton("Chiudi", null)
-                .setNeutralButton("Apri Accessibilità", (d, w) -> openAccessibilitySettings());
-
-        if (requested) {
-            b.setPositiveButton("Disattiva", (d, w) -> {
-                prefs.edit().putBoolean("override_launcher", false).apply();
-                Toast.makeText(this, "Sostituzione launcher disattivata", Toast.LENGTH_LONG).show();
-            });
-        } else {
-            b.setPositiveButton("Attiva", (d, w) -> {
-                prefs.edit().putBoolean("override_launcher", true).apply();
-                if (!isFoyhoAccessibilityEnabled()) {
-                    Toast.makeText(this, "Ora abilita «Foyho TV - Sostituisci launcher» in Accessibilità", Toast.LENGTH_LONG).show();
-                    openAccessibilitySettings();
-                } else {
-                    Toast.makeText(this, "Sostituzione launcher attivata", Toast.LENGTH_LONG).show();
-                }
-            });
-        }
-        b.show();
-    }
-
-    private void openAccessibilitySettings() {
-        prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 20000L).apply();
-        try {
-            Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            startActivity(i);
-        } catch(Exception e) {
-            safeStart(Settings.ACTION_SETTINGS);
-        }
-    }
-
-    private boolean isFoyhoAccessibilityEnabled() {
-        return isAccessibilityPackageEnabled(getPackageName());
-    }
-
-    private boolean isAccessibilityPackageEnabled(String packageName) {
-        try {
-            String enabled = Settings.Secure.getString(
-                    getContentResolver(),
-                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            return enabled != null && enabled.toLowerCase(Locale.ROOT)
-                    .contains(packageName.toLowerCase(Locale.ROOT));
-        } catch(Exception ignored) {
-            return false;
-        }
-    }
-
-    private void showWeatherCityDialog() {
-        final EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("es. Napoli");
-        input.setText(prefs.getString("weather_city", ""));
-
-        new AlertDialog.Builder(this)
-                .setTitle("Città meteo")
-                .setMessage("Scrivi la città da usare per il meteo. Lascia vuoto per il rilevamento automatico tramite rete.")
-                .setView(input)
-                .setPositiveButton("Salva", (d, w) -> {
-                    String city = input.getText().toString().trim();
-                    prefs.edit()
-                            .putString("weather_city", city)
-                            .remove("weather_last")
-                            .remove("weather_text")
-                            .apply();
-                    updateWeather();
-                })
-                .setNeutralButton("Automatico", (d, w) -> {
-                    prefs.edit()
-                            .remove("weather_city")
-                            .remove("weather_last")
-                            .remove("weather_text")
-                            .apply();
-                    updateWeather();
-                })
-                .setNegativeButton("Annulla", null)
-                .show();
-    }
-
-    private void updateWeather() {
-        if (weather == null) return;
-
-        long now = System.currentTimeMillis();
-        long last = prefs.getLong("weather_last", 0);
-        String cached = prefs.getString("weather_text", null);
-        if (cached != null && now - last < 30L * 60L * 1000L) {
-            weather.setText(cached);
-            return;
-        }
-
-        weather.setText("☁ …");
-
-        new Thread(() -> {
-            HttpURLConnection con = null;
-            try {
-                String city = prefs.getString("weather_city", "").trim();
-                String target;
-                if (city.isEmpty()) {
-                    target = "https://wttr.in/?format=j1";
-                } else {
-                    target = "https://wttr.in/" +
-                            URLEncoder.encode(city, "UTF-8").replace("+", "%20") +
-                            "?format=j1";
-                }
-
-                con = (HttpURLConnection) new URL(target).openConnection();
-                con.setConnectTimeout(6000);
-                con.setReadTimeout(6000);
-                con.setRequestProperty("User-Agent", "FoyhoTV/2.3");
-                con.setRequestProperty("Accept", "application/json");
-
-                StringBuilder out = new StringBuilder();
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
-                    String line;
-                    while ((line = br.readLine()) != null) out.append(line);
-                }
-
-                JSONObject root = new JSONObject(out.toString());
-                JSONObject current = root.getJSONArray("current_condition").getJSONObject(0);
-                String temp = current.optString("temp_C", "--");
-                String desc = "";
-                JSONArray descArray = current.optJSONArray("weatherDesc");
-                if (descArray != null && descArray.length() > 0) {
-                    desc = descArray.getJSONObject(0).optString("value", "");
-                }
-
-                String text = weatherSymbol(desc) + " " + temp + "°C";
-                prefs.edit()
-                        .putString("weather_text", text)
-                        .putLong("weather_last", System.currentTimeMillis())
-                        .apply();
-
-                final String result = text;
-                runOnUiThread(() -> {
-                    if (weather != null) weather.setText(result);
-                });
-            } catch(Exception e) {
-                runOnUiThread(() -> {
-                    if (weather != null) {
-                        weather.setText(prefs.getString("weather_text", "☁ --°C"));
-                    }
-                });
-            } finally {
-                if (con != null) con.disconnect();
-            }
-        }).start();
-    }
-
-    private String weatherSymbol(String description) {
-        String d = description == null ? "" : description.toLowerCase(Locale.ROOT);
-        if (d.contains("thunder")) return "⚡";
-        if (d.contains("snow") || d.contains("sleet") || d.contains("ice")) return "❄";
-        if (d.contains("rain") || d.contains("drizzle") || d.contains("shower")) return "☂";
-        if (d.contains("fog") || d.contains("mist")) return "≋";
-        if (d.contains("partly")) return "⛅";
-        if (d.contains("cloud") || d.contains("overcast")) return "☁";
-        if (d.contains("sun") || d.contains("clear")) return "☀";
-        return "☁";
-    }
-
-    private boolean isDefaultHome() {
-        try {
-            if (Build.VERSION.SDK_INT >= 29) {
-                RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
-                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) {
-                    return rm.isRoleHeld(RoleManager.ROLE_HOME);
-                }
-            }
-
-            Intent home = new Intent(Intent.ACTION_MAIN);
-            home.addCategory(Intent.CATEGORY_HOME);
-            ResolveInfo ri = getPackageManager().resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
-            return ri != null && ri.activityInfo != null &&
-                    getPackageName().equals(ri.activityInfo.packageName);
-        } catch(Exception ignored) {
-            return false;
-        }
-    }
-
-    private void requestDefaultHome() {
-        prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 20000L).apply();
-        if (isDefaultHome()) {
-            Toast.makeText(this, "Foyho TV è già la Home predefinita", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        try {
-            if (Build.VERSION.SDK_INT >= 29) {
-                RoleManager rm = (RoleManager) getSystemService(ROLE_SERVICE);
-                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) {
-                    startActivityForResult(
-                            rm.createRequestRoleIntent(RoleManager.ROLE_HOME),
-                            REQ_HOME_ROLE
-                    );
-                    return;
-                }
-            }
-
-            Intent settings = new Intent(Settings.ACTION_HOME_SETTINGS);
-            if (settings.resolveActivity(getPackageManager()) != null) {
-                startActivity(settings);
-                Toast.makeText(this, "Seleziona Foyho TV come app Home predefinita", Toast.LENGTH_LONG).show();
-                return;
-            }
-
-            Intent home = new Intent(Intent.ACTION_MAIN);
-            home.addCategory(Intent.CATEGORY_HOME);
-            home.addCategory(Intent.CATEGORY_DEFAULT);
-            startActivity(Intent.createChooser(home, "Scegli Foyho TV come Home"));
-        } catch(Exception e) {
-            Toast.makeText(this, "Apri Impostazioni > App > App predefinite > Home e scegli Foyho TV", Toast.LENGTH_LONG).show();
-            safeStart(Settings.ACTION_SETTINGS);
-        }
-    }
-
-    private void chooseWallpaper() {
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.setType("image/*");
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        startActivityForResult(i, REQ_WALLPAPER);
-    }
-
-    private void chooseCardSize() {
-        String[] items = {"Compatta","Normale","Grande"};
-        new AlertDialog.Builder(this).setTitle("Dimensione tile")
-                .setSingleChoiceItems(items, prefs.getInt("card_size",1), (d, which) -> {
-                    prefs.edit().putInt("card_size", which).apply();
-                    d.dismiss(); buildHome();
-                }).show();
-    }
-
-    private void chooseDim() {
-        String[] items = {"Leggero","Medio","Scuro"};
-        int current = prefs.getInt("dim",28) < 20 ? 0 : prefs.getInt("dim",28) < 42 ? 1 : 2;
-        new AlertDialog.Builder(this).setTitle("Oscuramento sfondo")
-                .setSingleChoiceItems(items, current, (d, which) -> {
-                    int value = which == 0 ? 12 : which == 1 ? 28 : 50;
-                    prefs.edit().putInt("dim", value).apply();
-                    d.dismiss(); buildHome();
-                }).show();
-    }
-
-    private void showHiddenApps() {
-        Set<String> hidden = getSet("hidden");
-        if (hidden.isEmpty()) {
-            Toast.makeText(this, "Nessuna app nascosta", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        List<String> pkgs = new ArrayList<>(hidden);
-        String[] labels = new String[pkgs.size()];
-        PackageManager pm = getPackageManager();
-        for (int i=0;i<pkgs.size();i++) {
-            try { labels[i] = String.valueOf(pm.getApplicationLabel(pm.getApplicationInfo(pkgs.get(i),0))); }
-            catch(Exception e) { labels[i] = pkgs.get(i); }
-        }
-        new AlertDialog.Builder(this).setTitle("Ripristina app")
-                .setItems(labels, (d, which) -> {
-                    Set<String> set = getSet("hidden");
-                    set.remove(pkgs.get(which));
-                    saveSet("hidden", set);
-                    loadApps(); buildHome();
-                }).show();
-    }
-
-    private void addSystemRow() {
-        addRowTitle("TV & Sistema");
-        HorizontalScrollView hsv = new HorizontalScrollView(this);
-        hsv.setHorizontalScrollBarEnabled(false);
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(dp(3),dp(8),dp(3),dp(18));
-        hsv.addView(row);
-
-        row.addView(systemCard("Video locali","▶", v -> openLocalVideo()), appCardParams());
-        row.addView(systemCard("Ingressi","⇄", v -> safeStart("android.settings.TV_INPUT_SETTINGS")), appCardParams());
-        row.addView(systemCard("Home predefinita","⌂", v -> requestDefaultHome()), appCardParams());
-        row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), appCardParams());
-        row.addView(systemCard("Impostazioni","⚙", v -> safeStart(Settings.ACTION_SETTINGS)), appCardParams());
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, cardHeight()+dp(30)));
-    }
-
-    private View systemCard(String name, String symbol, View.OnClickListener click) {
-        FrameLayout card = baseFrameCard();
-        TextView bg = label(symbol, 58, 0xFF66FF8C);
-        bg.setGravity(Gravity.CENTER);
-        bg.setBackground(appFallbackGradient(name));
-        card.addView(bg, new FrameLayout.LayoutParams(-1,-1));
-
-        View shade = new View(this);
-        GradientDrawable sh = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000,0xB0000000});
-        shade.setBackground(sh);
-        card.addView(shade,new FrameLayout.LayoutParams(-1,-1));
-
-        TextView tx = label(name,14,Color.WHITE);
-        tx.setGravity(Gravity.LEFT|Gravity.BOTTOM);
-        tx.setTypeface(null,Typeface.BOLD);
-        tx.setPadding(dp(13),0,dp(13),dp(11));
-        card.addView(tx,new FrameLayout.LayoutParams(-1,-1));
-
-        card.setOnClickListener(click);
-        focusBehavior(card,name,"TV & Sistema");
-        return card;
-    }
-
-    private void openLocalVideo() {
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.setType("video/*");
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        startActivityForResult(i, REQ_LOCAL_VIDEO);
-    }
-
-
-    private TextView topStatusIcon(String symbol, String title) {
-        TextView t = new TextView(this);
-        t.setText(symbol);
-        t.setTextSize(17);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setTextColor(Color.WHITE);
-        t.setGravity(Gravity.CENTER);
-        t.setFocusable(true);
-        t.setClickable(true);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x4420C45C);
-        bg.setCornerRadius(dp(12));
-        bg.setStroke(dp(1), 0x7758FF89);
-        t.setBackground(bg);
-        t.setPadding(dp(10), dp(6), dp(10), dp(6));
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-        lp.setMargins(0, 0, dp(8), 0);
-        t.setLayoutParams(lp);
-
-        t.setOnFocusChangeListener((v, focused) -> {
-            v.animate()
-                    .scaleX(focused ? 1.10f : 1f)
-                    .scaleY(focused ? 1.10f : 1f)
-                    .setDuration(130)
-                    .start();
-
-            GradientDrawable g = new GradientDrawable();
-            g.setColor(focused ? 0xAA20C45C : 0x4420C45C);
-            g.setCornerRadius(dp(12));
-            g.setStroke(dp(focused ? 3 : 1),
-                    focused ? 0xFF39FF75 : 0x7758FF89);
-            v.setBackground(g);
-
-            if (Build.VERSION.SDK_INT >= 21) {
-                v.setElevation(dp(focused ? 12 : 4));
-            }
-
-            if (focused && focusTitle != null) {
-                focusTitle.setText(title);
-                focusSubtitle.setText("Scorciatoia barra superiore");
-            }
-        });
-
-        return t;
-    }
-
-    private void updateStatusIcons() {
-        if (networkIcon != null) {
-            int state = getNetworkState();
-            if (state == 2) {
-                networkIcon.setText("LAN");
-            } else if (state == 1) {
-                networkIcon.setText("Wi‑Fi");
-            } else {
-                networkIcon.setText("Offline");
-            }
-        }
-
-        if (notificationsIcon != null) notificationsIcon.setText("🔔");
-        if (inputsIcon != null) inputsIcon.setText("⇄");
-    }
-
-    private int getNetworkState() {
-        try {
-            ConnectivityManager cm =
-                    (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-            if (cm == null) return 0;
-
-            Network active = cm.getActiveNetwork();
-            if (active == null) return 0;
-
-            NetworkCapabilities caps = cm.getNetworkCapabilities(active);
-            if (caps == null) return 0;
-
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return 2;
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return 1;
-
-            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ? 1 : 0;
-        } catch(Exception ignored) {
-            return 0;
-        }
-    }
-
-    private void openNotificationsPanel() {
-        prefs.edit()
-                .putLong("override_pause_until", System.currentTimeMillis() + 10000L)
-                .apply();
-
-        try {
-            Intent i = new Intent("android.settings.NOTIFICATION_SETTINGS");
-            startActivity(i);
-        } catch(Exception e) {
-            safeStart(Settings.ACTION_SETTINGS);
-        }
-    }
-
-    private void startMatrixRain() {
-        if (matrixOverlay == null) return;
-
-        if (matrixRunnable != null) {
-            handler.removeCallbacks(matrixRunnable);
-        }
-
-        matrixRunnable = new Runnable() {
-            @Override public void run() {
-                if (matrixOverlay != null) {
-                    matrixOverlay.setText(buildMatrixText());
-
-                    float shift = -dp(matrixRandom.nextInt(14));
-                    matrixOverlay.animate()
-                            .translationY(shift)
-                            .alpha(0.16f + matrixRandom.nextFloat() * 0.08f)
-                            .setDuration(1600)
-                            .start();
-                }
-
-                handler.postDelayed(this, 1600);
-            }
-        };
-
-        handler.post(matrixRunnable);
-    }
-
-    private String buildMatrixText() {
-        String chars =
-                "01アイウエオカキクケコサシスセソABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        StringBuilder out = new StringBuilder();
-
-        final int rows = 20;
-        final int cols = 42;
-
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                if (matrixRandom.nextInt(9) == 0) {
-                    out.append(chars.charAt(matrixRandom.nextInt(chars.length())));
-                } else {
-                    out.append(' ');
-                }
-            }
-
-            if (r < rows - 1) out.append('\n');
-        }
-
-        return out.toString();
     }
 
     private void safeStart(String action) {
-        prefs.edit().putLong("override_pause_until", System.currentTimeMillis() + 10000L).apply();
-        try { startActivity(new Intent(action)); }
-        catch(Exception e) { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch(Exception ignored) {} }
-    }
-
-    @Override protected void onActivityResult(int req, int result, Intent data) {
-        super.onActivityResult(req, result, data);
-
-        if (req == REQ_HOME_ROLE) {
-            if (isDefaultHome()) {
-                Toast.makeText(this, "Foyho TV impostata come Home predefinita", Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(this, "Foyho TV non è ancora la Home predefinita", Toast.LENGTH_LONG).show();
-            }
-            return;
-        }
-
-        if (result != RESULT_OK || data == null) return;
-        Uri uri = data.getData();
-        if (uri == null) return;
-
-        if (req == REQ_WALLPAPER) {
-            try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-            catch(Exception ignored) {}
-            prefs.edit().putString("wallpaper_uri", uri.toString()).apply();
-            buildHome();
-        } else if (req == REQ_LOCAL_VIDEO) {
-            Intent play = new Intent(Intent.ACTION_VIEW);
-            play.setDataAndType(uri, "video/*");
-            play.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            try { startActivity(play); } catch(Exception ignored) {}
+        try {
+            startActivity(new Intent(action));
+        } catch (Exception e) {
+            toast("Azione non disponibile su questa TV");
         }
     }
 
-    private Button smallButton(String text) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setTextSize(13);
-        b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(0x5534D96B);
-        g.setCornerRadius(dp(18));
-        g.setStroke(dp(1),0xAA58FF89);
-        b.setBackground(g);
-        b.setFocusable(true);
-        return b;
-    }
-
-    private TextView label(String text, int sp, int color) {
-        TextView v = new TextView(this);
-        v.setText(text);
-        v.setTextSize(sp);
-        v.setTextColor(color);
-        return v;
-    }
-
-    private String customLabel(AppItem item) {
-        return prefs.getString("label_"+item.pkg, item.label);
-    }
-
-    private String categoryDisplay(String id) {
-        if ("tv".equals(id)) return "App TV";
-        if ("media".equals(id)) return "Streaming & Film";
-        if ("music".equals(id)) return "Musica";
-        if ("games".equals(id)) return "Giochi";
-        if ("tools".equals(id)) return "Utility";
-        return "Altre app";
-    }
-
-    private boolean containsAny(String s, String... needles) {
-        for (String n : needles) if (s.contains(n)) return true;
-        return false;
-    }
-
-    private int cardWidth() {
-        int s = prefs.getInt("card_size",1);
-        return s == 0 ? dp(170) : s == 2 ? dp(250) : dp(210);
-    }
-
-    private int cardHeight() {
-        int s = prefs.getInt("card_size",1);
-        return s == 0 ? dp(116) : s == 2 ? dp(168) : dp(140);
-    }
-
-    private Set<String> getSet(String key) {
-        return new LinkedHashSet<>(prefs.getStringSet(key, new LinkedHashSet<>()));
-    }
-
-    private void saveSet(String key, Set<String> set) {
-        prefs.edit().putStringSet(key, new LinkedHashSet<>(set)).apply();
-    }
-
-    private List<String> getOrder() {
-        String raw = prefs.getString("order","");
-        List<String> out = new ArrayList<>();
-        if (!raw.isEmpty()) out.addAll(Arrays.asList(raw.split("\\|")));
-        return out;
-    }
-
-    private void saveOrder(List<String> order) {
-        prefs.edit().putString("order", android.text.TextUtils.join("|",order)).apply();
+    private void toast(String text) {
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
     }
 
     private void updateClock() {
-        renderClock();
-        handler.removeCallbacksAndMessages(null);
-        handler.postDelayed(new Runnable() {
-            @Override public void run() {
-                renderClock();
-                handler.postDelayed(this, 30000);
-            }
-        }, 30000);
+        Date now = new Date();
+        clockView.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now));
+        dateView.setText(new SimpleDateFormat("EEE d MMM", Locale.ITALIAN).format(now));
+        if (weatherView != null) {
+            weatherView.setText("Meteo\\nSereno 22°C");
+        }
     }
 
-    private void renderClock() {
-        if (clock != null) clock.setText(new SimpleDateFormat("HH:mm", Locale.ITALY).format(new Date()));
-        if (date != null) date.setText(new SimpleDateFormat("EEE d MMM", Locale.ITALY).format(new Date()));
+    private GradientDrawable makeBackground() {
+        GradientDrawable gd = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{BG, BG_2, Color.rgb(8, 16, 28)}
+        );
+        gd.setCornerRadius(0f);
+        return gd;
     }
 
-    private int dp(int v) {
-        return (int)(v * getResources().getDisplayMetrics().density + .5f);
+    private GradientDrawable makeRounded(int fill, int radiusDp, int strokeColor, int strokeWidthDp) {
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(fill);
+        gd.setCornerRadius(dp(radiusDp));
+        if (strokeWidthDp > 0) {
+            gd.setStroke(dp(strokeWidthDp), strokeColor);
+        }
+        return gd;
+    }
+
+    private TextView makeText(String text, int sizeSp, int color, boolean bold) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(color);
+        tv.setTextSize(sizeSp);
+        if (bold) tv.setTypeface(Typeface.DEFAULT_BOLD);
+        return tv;
+    }
+
+    private int dp(int value) {
+        return Math.round(getResources().getDisplayMetrics().density * value);
+    }
+
+    private void hideSystemUi() {
+        View decor = getWindow().getDecorView();
+        decor.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
     }
 }
