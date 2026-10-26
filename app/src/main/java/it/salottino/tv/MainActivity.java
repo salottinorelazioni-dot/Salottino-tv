@@ -107,7 +107,6 @@ public class MainActivity extends Activity {
         addAppRowIfAny("Musica", filterByCategory("music"));
         addAppRowIfAny("Giochi", filterByCategory("games"));
         addAppRowIfAny("Utility", filterByCategory("tools"));
-        addAppRowIfAny("Altre app", filterByCategory("other"));
 
         addSystemRow();
 
@@ -161,21 +160,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-2, -2);
         ap.setMargins(dp(16), dp(3), dp(8), dp(3));
 
-        TextView profile = headerAction("①", "Profilo", "Utenti e profili Android TV");
-        profile.setOnClickListener(v -> safeStart("android.settings.USER_SETTINGS"));
-        actions.addView(profile);
-
-        TextView inputs = headerAction("⇄", "Ingressi", "HDMI, TV e altre sorgenti");
-        inputs.setOnClickListener(v -> safeStart("android.settings.TV_INPUT_SETTINGS"));
-        actions.addView(inputs);
-
-        TextView settings = headerAction("⚙", "Impostazioni Foyho", "Sfondo, meteo, launcher e dimensione tile");
+        TextView settings = headerAction("⚙", "Impostazioni Foyho", "Sfondo, meteo, launcher e altre opzioni");
         settings.setOnClickListener(v -> showSettings());
         actions.addView(settings);
-
-        TextView account = headerAccountAction();
-        account.setOnClickListener(v -> safeStart(Settings.ACTION_SYNC_SETTINGS));
-        actions.addView(account);
 
         header.addView(actions, ap);
         header.addView(timeBox);
@@ -275,8 +262,8 @@ public class MainActivity extends Activity {
         row.setPadding(dp(3), dp(8), dp(3), dp(18));
         hsv.addView(row, new HorizontalScrollView.LayoutParams(-2,-2));
 
-        for (AppItem item : list) row.addView(createAppCard(item), appCardParams(list.size()));
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, responsiveCardHeight(list.size())+dp(30)));
+        for (AppItem item : list) row.addView(createAppCard(item), mediumAppCardParams());
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(170)));
     }
 
     private void addRowTitle(String title) {
@@ -345,6 +332,12 @@ public class MainActivity extends Activity {
         g.setCornerRadius(dp(18));
         g.setStroke(dp(focused ? 3 : 1), focused ? 0xFF58FF89 : 0x554C6657);
         return g;
+    }
+
+    private LinearLayout.LayoutParams mediumAppCardParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(210), dp(140));
+        lp.setMargins(0,0,dp(14),0);
+        return lp;
     }
 
     private LinearLayout.LayoutParams appCardParams() {
@@ -718,7 +711,6 @@ public class MainActivity extends Activity {
                 "Città meteo",
                 "Imposta Foyho TV come Home",
                 "Sostituisci il launcher corrente: " + (overrideActive ? "ATTIVO" : "DISATTIVO"),
-                "Dimensione tile",
                 "Oscuramento sfondo",
                 "Mostra app nascoste"
         };
@@ -733,9 +725,8 @@ public class MainActivity extends Activity {
                     } else if (which == 2) showWeatherCityDialog();
                     else if (which == 3) requestDefaultHome();
                     else if (which == 4) showLauncherOverrideDialog();
-                    else if (which == 5) chooseCardSize();
-                    else if (which == 6) chooseDim();
-                    else if (which == 7) showHiddenApps();
+                    else if (which == 5) chooseDim();
+                    else if (which == 6) showHiddenApps();
                 }).show();
     }
 
@@ -1031,12 +1022,30 @@ public class MainActivity extends Activity {
         row.setPadding(dp(3),dp(8),dp(3),dp(18));
         hsv.addView(row);
 
-        row.addView(systemCard("Video locali","▶", v -> openLocalVideo()), appCardParams());
-        row.addView(systemCard("Ingressi","⇄", v -> safeStart("android.settings.TV_INPUT_SETTINGS")), appCardParams());
-        row.addView(systemCard("Home predefinita","⌂", v -> requestDefaultHome()), appCardParams());
-        row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), appCardParams());
-        row.addView(systemCard("Impostazioni","⚙", v -> safeStart(Settings.ACTION_SETTINGS)), appCardParams());
-        content.addView(hsv, new LinearLayout.LayoutParams(-1, cardHeight()+dp(30)));
+        row.addView(systemCard("Video locali","▶", v -> openLocalVideo()), mediumAppCardParams());
+        row.addView(systemCard("Ingressi","⇄", v -> safeStart("android.settings.TV_INPUT_SETTINGS")), mediumAppCardParams());
+        row.addView(systemCard("Home predefinita","⌂", v -> requestDefaultHome()), mediumAppCardParams());
+        row.addView(systemCard("Wi‑Fi","◉", v -> safeStart(Settings.ACTION_WIFI_SETTINGS)), mediumAppCardParams());
+        row.addView(systemCard("Impostazioni","⚙", v -> safeStart(Settings.ACTION_SETTINGS)), mediumAppCardParams());
+        row.addView(systemCard("Altre app","⋯", v -> showOtherApps()), mediumAppCardParams());
+        content.addView(hsv, new LinearLayout.LayoutParams(-1, dp(170)));
+    }
+
+    private void showOtherApps() {
+        List<AppItem> other = filterByCategory("other");
+        if (other.isEmpty()) {
+            Toast.makeText(this, "Nessuna app nella categoria Altre app", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] names = new String[other.size()];
+        for (int i=0; i<other.size(); i++) names[i] = customLabel(other.get(i));
+
+        new AlertDialog.Builder(this)
+                .setTitle("Altre app")
+                .setItems(names, (d, which) -> launchApp(other.get(which)))
+                .setNegativeButton("Chiudi", null)
+                .show();
     }
 
     private View systemCard(String name, String symbol, View.OnClickListener click) {
