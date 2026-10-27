@@ -1,0 +1,57 @@
+name: Foyho TV 4.0.1 Clean Home
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment-3.5
+          fetch-depth: 0
+
+      - name: Remove Favorites and Recent rows
+        shell: bash
+        run: |
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcCA9IFBhdGgoImFwcC9zcmMvbWFpbi9qYXZhL2l0L3NhbG90dGluby90di9NYWluQWN0aXZpdHkuamF2YSIpCnMgPSBwLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQoKZGVmIHJlcGxhY2Vfb25jZShvbGQsIG5ldywgbGFiZWwpOgogICAgZ2xvYmFsIHMKICAgIGlmIG9sZCBub3QgaW4gczoKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYie2xhYmVsfTogYmxvY2NvIG5vbiB0cm92YXRvIikKICAgIHMgPSBzLnJlcGxhY2Uob2xkLCBuZXcsIDEpCgpyZXBsYWNlX29uY2UoCicnJyAgICAgICAgTGlzdDxXYXRjaEl0ZW0+IHdhdGNoID0gbG9hZFdhdGNoTmV4dCgpOwogICAgICAgIGlmICghd2F0Y2guaXNFbXB0eSgpKSB7CiAgICAgICAgICAgIGFkZFdhdGNoTmV4dFJvdygiR3VhcmRhIHN1Y2Nlc3Npdm8iLCB3YXRjaCk7CiAgICAgICAgfSBlbHNlIHsKICAgICAgICAgICAgTGlzdDxBcHBJdGVtPiByZWNlbnQgPSByZWNlbnRBcHBzKCk7CiAgICAgICAgICAgIGlmICghcmVjZW50LmlzRW1wdHkoKSkgYWRkQXBwUm93KCJBcGVydGkgZGkgcmVjZW50ZSIsIHJlY2VudCk7CiAgICAgICAgfQoKICAgICAgICBMaXN0PEFwcEl0ZW0+IGZhdiA9IGZhdm9yaXRlQXBwcygpOwogICAgICAgIGlmICghZmF2LmlzRW1wdHkoKSkgYWRkQXBwUm93KCJQcmVmZXJpdGkiLCBmYXYpOwoKICAgICAgICBmb3IgKFN0cmluZyBjYXRlZ29yeUlkIDogZ2V0Q2F0ZWdvcnlPcmRlcigpKSB7CicnJywKJycnICAgICAgICBMaXN0PFdhdGNoSXRlbT4gd2F0Y2ggPSBsb2FkV2F0Y2hOZXh0KCk7CiAgICAgICAgaWYgKCF3YXRjaC5pc0VtcHR5KCkpIHsKICAgICAgICAgICAgYWRkV2F0Y2hOZXh0Um93KCJHdWFyZGEgc3VjY2Vzc2l2byIsIHdhdGNoKTsKICAgICAgICB9CgogICAgICAgIGZvciAoU3RyaW5nIGNhdGVnb3J5SWQgOiBnZXRDYXRlZ29yeU9yZGVyKCkpIHsKJycnLAoicmVtb3ZlIHJlY2VudCBhbmQgZmF2b3JpdGVzIHJvd3MiCikKCnJlcGxhY2Vfb25jZSgKJycnICAgIHByaXZhdGUgdm9pZCBzaG93QXBwTWVudShBcHBJdGVtIGl0ZW0pIHsKICAgICAgICBTZXQ8U3RyaW5nPiBmYXYgPSBnZXRTZXQoImZhdm9yaXRlcyIpOwogICAgICAgIGJvb2xlYW4gaXNGYXYgPSBmYXYuY29udGFpbnMoaXRlbS5wa2cpOwogICAgICAgIFN0cmluZ1tdIG9wdGlvbnMgPSB7CiAgICAgICAgICAgICAgICBpc0ZhdiA/ICJSaW11b3ZpIGRhaSBwcmVmZXJpdGkiIDogIkFnZ2l1bmdpIGFpIHByZWZlcml0aSIsCiAgICAgICAgICAgICAgICAiQ2FtYmlhIGNhdGVnb3JpYSIsCiAgICAgICAgICAgICAgICAiU3Bvc3RhIGEgc2luaXN0cmEiLAogICAgICAgICAgICAgICAgIlNwb3N0YSBhIGRlc3RyYSIsCiAgICAgICAgICAgICAgICAiTmFzY29uZGkgYXBwIgogICAgICAgIH07CgogICAgICAgIG5ldyBBbGVydERpYWxvZy5CdWlsZGVyKHRoaXMpCiAgICAgICAgICAgICAgICAuc2V0VGl0bGUoY3VzdG9tTGFiZWwoaXRlbSkpCiAgICAgICAgICAgICAgICAuc2V0SXRlbXMob3B0aW9ucywgKGQsIHdoaWNoKSAtPiB7CiAgICAgICAgICAgICAgICAgICAgaWYgKHdoaWNoID09IDApIHsKICAgICAgICAgICAgICAgICAgICAgICAgU2V0PFN0cmluZz4gc2V0ID0gZ2V0U2V0KCJmYXZvcml0ZXMiKTsKICAgICAgICAgICAgICAgICAgICAgICAgaWYgKHNldC5jb250YWlucyhpdGVtLnBrZykpIHNldC5yZW1vdmUoaXRlbS5wa2cpOyBlbHNlIHNldC5hZGQoaXRlbS5wa2cpOwogICAgICAgICAgICAgICAgICAgICAgICBzYXZlU2V0KCJmYXZvcml0ZXMiLCBzZXQpOwogICAgICAgICAgICAgICAgICAgICAgICBidWlsZEhvbWUoKTsKICAgICAgICAgICAgICAgICAgICB9IGVsc2UgaWYgKHdoaWNoID09IDEpIHsKICAgICAgICAgICAgICAgICAgICAgICAgc2hvd0NhdGVnb3J5UGlja2VyKGl0ZW0pOwogICAgICAgICAgICAgICAgICAgIH0gZWxzZSBpZiAod2hpY2ggPT0gMikgewogICAgICAgICAgICAgICAgICAgICAgICBtb3ZlQXBwKGl0ZW0ucGtnLCAtMSk7CiAgICAgICAgICAgICAgICAgICAgfSBlbHNlIGlmICh3aGljaCA9PSAzKSB7CiAgICAgICAgICAgICAgICAgICAgICAgIG1vdmVBcHAoaXRlbS5wa2csIDEpOwogICAgICAgICAgICAgICAgICAgIH0gZWxzZSBpZiAod2hpY2ggPT0gNCkgewogICAgICAgICAgICAgICAgICAgICAgICBTZXQ8U3RyaW5nPiBoaWRkZW4gPSBnZXRTZXQoImhpZGRlbiIpOwogICAgICAgICAgICAgICAgICAgICAgICBoaWRkZW4uYWRkKGl0ZW0ucGtnKTsKICAgICAgICAgICAgICAgICAgICAgICAgc2F2ZVNldCgiaGlkZGVuIiwgaGlkZGVuKTsKICAgICAgICAgICAgICAgICAgICAgICAgbG9hZEFwcHMoKTsgYnVpbGRIb21lKCk7CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgfSkuc2hvdygpOwogICAgfQonJycsCicnJyAgICBwcml2YXRlIHZvaWQgc2hvd0FwcE1lbnUoQXBwSXRlbSBpdGVtKSB7CiAgICAgICAgU3RyaW5nW10gb3B0aW9ucyA9IHsKICAgICAgICAgICAgICAgICJDYW1iaWEgY2F0ZWdvcmlhIiwKICAgICAgICAgICAgICAgICJTcG9zdGEgYSBzaW5pc3RyYSIsCiAgICAgICAgICAgICAgICAiU3Bvc3RhIGEgZGVzdHJhIiwKICAgICAgICAgICAgICAgICJOYXNjb25kaSBhcHAiCiAgICAgICAgfTsKCiAgICAgICAgbmV3IEFsZXJ0RGlhbG9nLkJ1aWxkZXIodGhpcykKICAgICAgICAgICAgICAgIC5zZXRUaXRsZShjdXN0b21MYWJlbChpdGVtKSkKICAgICAgICAgICAgICAgIC5zZXRJdGVtcyhvcHRpb25zLCAoZCwgd2hpY2gpIC0+IHsKICAgICAgICAgICAgICAgICAgICBpZiAod2hpY2ggPT0gMCkgewogICAgICAgICAgICAgICAgICAgICAgICBzaG93Q2F0ZWdvcnlQaWNrZXIoaXRlbSk7CiAgICAgICAgICAgICAgICAgICAgfSBlbHNlIGlmICh3aGljaCA9PSAxKSB7CiAgICAgICAgICAgICAgICAgICAgICAgIG1vdmVBcHAoaXRlbS5wa2csIC0xKTsKICAgICAgICAgICAgICAgICAgICB9IGVsc2UgaWYgKHdoaWNoID09IDIpIHsKICAgICAgICAgICAgICAgICAgICAgICAgbW92ZUFwcChpdGVtLnBrZywgMSk7CiAgICAgICAgICAgICAgICAgICAgfSBlbHNlIGlmICh3aGljaCA9PSAzKSB7CiAgICAgICAgICAgICAgICAgICAgICAgIFNldDxTdHJpbmc+IGhpZGRlbiA9IGdldFNldCgiaGlkZGVuIik7CiAgICAgICAgICAgICAgICAgICAgICAgIGhpZGRlbi5hZGQoaXRlbS5wa2cpOwogICAgICAgICAgICAgICAgICAgICAgICBzYXZlU2V0KCJoaWRkZW4iLCBoaWRkZW4pOwogICAgICAgICAgICAgICAgICAgICAgICBsb2FkQXBwcygpOyBidWlsZEhvbWUoKTsKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9KS5zaG93KCk7CiAgICB9CicnJywKInJlbW92ZSBmYXZvcml0ZSBhY3Rpb24iCikKCnAud3JpdGVfdGV4dChzLCBlbmNvZGluZz0idXRmLTgiKQoKZyA9IFBhdGgoImFwcC9idWlsZC5ncmFkbGUiKQpncyA9IGcucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCmdzID0gcmUuc3ViKHIidmVyc2lvbkNvZGVccytcZCsiLCAidmVyc2lvbkNvZGUgMTkiLCBncywgY291bnQ9MSkKZ3MgPSByZS5zdWIociJ2ZXJzaW9uTmFtZVxzKydbXiddKyciLCAidmVyc2lvbk5hbWUgJzQuMC4xJyIsIGdzLCBjb3VudD0xKQpnLndyaXRlX3RleHQoZ3MsIGVuY29kaW5nPSJ1dGYtOCIpCgptID0gUGF0aCgiYXBwL3NyYy9tYWluL0FuZHJvaWRNYW5pZmVzdC54bWwiKQptcyA9IG0ucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCm1zID0gbXMucmVwbGFjZSgnYW5kcm9pZDpsYWJlbD0iRm95aG8gVFYgRVhQIicsICdhbmRyb2lkOmxhYmVsPSJGb3lobyBUViInKQptcyA9IG1zLnJlcGxhY2UoJ2FuZHJvaWQ6bGFiZWw9IkZveWhvIFRWIEVYUCAtIFNvc3RpdHVpc2NpIGxhdW5jaGVyIicsCiAgICAgICAgICAgICAgICAnYW5kcm9pZDpsYWJlbD0iRm95aG8gVFYgLSBTb3N0aXR1aXNjaSBsYXVuY2hlciInKQptLndyaXRlX3RleHQobXMsIGVuY29kaW5nPSJ1dGYtOCIpCgpwcmludCgiRm95aG8gVFYgNC4wLjE6IHJpbW9zc2kgUHJlZmVyaXRpIGUgQXBlcnRpIGRpIHJlY2VudGUiKQ==' | base64 -d > /tmp/foyho401.py
+          python3 /tmp/foyho401.py
+
+      - name: Save Android TV changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/it/salottino/tv/MainActivity.java app/build.gradle app/src/main/AndroidManifest.xml
+          git diff --cached --quiet || git commit -m "Foyho TV 4.0.1 remove favorites and recent rows"
+          git push origin HEAD:experiment-3.5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foyho-TV-4.0.1-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
