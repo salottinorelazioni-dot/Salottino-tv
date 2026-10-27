@@ -22,7 +22,7 @@
     <application
         android:allowBackup="false"
         android:banner="@drawable/foyho_banner"
-        android:label="Foyho TV EXP"
+        android:label="Foyho TV"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
@@ -45,7 +45,7 @@
         <service
             android:name=".FoyhoAccessibilityService"
             android:exported="true"
-            android:label="Foyho TV EXP - Sostituisci launcher"
+            android:label="Foyho TV - Sostituisci launcher"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

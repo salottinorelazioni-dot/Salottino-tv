@@ -97,13 +97,7 @@ public class MainActivity extends Activity {
         List<WatchItem> watch = loadWatchNext();
         if (!watch.isEmpty()) {
             addWatchNextRow("Guarda successivo", watch);
-        } else {
-            List<AppItem> recent = recentApps();
-            if (!recent.isEmpty()) addAppRow("Aperti di recente", recent);
         }
-
-        List<AppItem> fav = favoriteApps();
-        if (!fav.isEmpty()) addAppRow("Preferiti", fav);
 
         for (String categoryId : getCategoryOrder()) {
             addAppRowIfAny(categoryDisplay(categoryId), filterByCategory(categoryId));
@@ -835,10 +829,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAppMenu(AppItem item) {
-        Set<String> fav = getSet("favorites");
-        boolean isFav = fav.contains(item.pkg);
         String[] options = {
-                isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti",
                 "Cambia categoria",
                 "Sposta a sinistra",
                 "Sposta a destra",
@@ -849,17 +840,12 @@ public class MainActivity extends Activity {
                 .setTitle(customLabel(item))
                 .setItems(options, (d, which) -> {
                     if (which == 0) {
-                        Set<String> set = getSet("favorites");
-                        if (set.contains(item.pkg)) set.remove(item.pkg); else set.add(item.pkg);
-                        saveSet("favorites", set);
-                        buildHome();
-                    } else if (which == 1) {
                         showCategoryPicker(item);
-                    } else if (which == 2) {
+                    } else if (which == 1) {
                         moveApp(item.pkg, -1);
-                    } else if (which == 3) {
+                    } else if (which == 2) {
                         moveApp(item.pkg, 1);
-                    } else if (which == 4) {
+                    } else if (which == 3) {
                         Set<String> hidden = getSet("hidden");
                         hidden.add(item.pkg);
                         saveSet("hidden", hidden);
